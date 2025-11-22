@@ -8,6 +8,10 @@ from PIL import Image, ImageOps
 from tkinterdnd2 import TkinterDnD, DND_ALL
 import time
 import tempfile
+import glob
+
+
+
 
 # Assuming these imports and global variables are available in the runtime environment
 import roop.globals
@@ -650,23 +654,121 @@ def select_source_path(source_path: Optional[str] = None) -> None:
         source_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n📸")
 
 
-def select_target_path(target_path: Optional[str] = None) -> None:
-    global RECENT_DIRECTORY_TARGET
+# --- Gallery UI for Target Selection ---
+def show_category_gallery():
+    def open_gallery_window(base_folder, media_type):
+        win = ctk.CTkToplevel()
+        win.title(f"Select a Target ({media_type.title()})")
+        win.geometry("900x600")
+        # Position window in front of main application
+        win.lift()
+        win.focus_force()
+        win.attributes('-topmost', True)  # Ensure it stays on top
 
+        categories = [d for d in os.listdir(base_folder) if os.path.isdir(os.path.join(base_folder, d))]
+        for cat in categories:
+            btn = ctk.CTkButton(win, text=cat.title(), font=("Segoe UI", 18),
+                                command=lambda c=cat: show_subcategory(win, base_folder, c, media_type))
+            btn.pack(fill='x', padx=10, pady=8)
+
+    def show_subcategory(win, base_folder, category, media_type):
+        for widget in win.winfo_children():
+            widget.destroy()
+        subfolder = os.path.join(base_folder, category)
+        subcategories = [d for d in os.listdir(subfolder) if os.path.isdir(os.path.join(subfolder, d))]
+        if subcategories:
+            for subcat in subcategories:
+                btn = ctk.CTkButton(win, text=subcat.title(), font=("Segoe UI", 16),
+                                    command=lambda sc=subcat: show_gallery(win, os.path.join(subfolder, sc), media_type))
+                btn.pack(fill='x', padx=10, pady=7)
+        else:
+            show_gallery(win, subfolder, media_type)
+
+    def show_gallery(win, gallery_folder, media_type):
+        for widget in win.winfo_children():
+            widget.destroy()
+        if media_type == 'images':
+            filetypes = ('*.jpg', '*.jpeg', '*.png', '*.bmp', '*.gif')
+        else:
+            filetypes = ('*.mp4', '*.avi', '*.mov', '*.mkv')
+        files = []
+        for ft in filetypes:
+            files.extend(glob.glob(os.path.join(gallery_folder, ft)))
+        if not files:
+            lbl = ctk.CTkLabel(win, text="No files found here.", font=("Segoe UI", 15))
+            lbl.pack(pady=20)
+            return
+        row = 0
+        col = 0
+        max_cols = 4
+
+        def on_select(path):
+            win.destroy()
+            roop.globals.target_path = path
+            img = render_image_preview(path, (250, 250)) if media_type == 'images' else render_video_preview(path, (250, 250))
+            target_label.configure(image=img, text="")
+            update_status(f"Selected: {os.path.basename(path)}")
+
+        for idx, fp in enumerate(files):
+            thumb = render_image_preview(fp, (120, 120)) if media_type == 'images' else render_video_preview(fp, (120, 120))
+            btn = ctk.CTkButton(win, image=thumb, text=os.path.basename(fp), compound='top',
+                                command=lambda p=fp: on_select(p), width=140, height=160)
+            btn.grid(row=row, column=col, padx=10, pady=14)
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+
+    root = ctk.CTkToplevel()
+    root.title("Choose Target Type")
+    root.geometry("340x260")
+    # Position window in front of main application
+    root.lift()
+    root.focus_force()
+    root.attributes('-topmost', True)  # Ensure it stays on top
+
+    def choose_type(media_type):
+        root.destroy()
+        here = os.path.dirname(os.path.abspath(__file__))
+        targets_dir = os.path.join(here, '..', 'targets', media_type)
+        targets_dir = os.path.abspath(targets_dir)
+        if os.path.exists(targets_dir):
+            open_gallery_window(targets_dir, media_type)
+        else:
+            # Fallback to file dialog if gallery folder doesn't exist
+            update_status(f"Gallery folder not found: {targets_dir}")
+            select_target_path_fallback()
+
+    img_btn = ctk.CTkButton(root, text="Select Image", font=("Segoe UI", 18, "bold"), command=lambda: choose_type('images'))
+    vid_btn = ctk.CTkButton(root, text="Select Video", font=("Segoe UI", 18, "bold"), command=lambda: choose_type('videos'))
+    img_btn.pack(fill='x', padx=40, pady=(40, 22))
+    vid_btn.pack(fill='x', padx=40, pady=(0, 22))
+# --- End Gallery UI ---
+
+def select_target_path_fallback():
+    """Fallback to traditional file dialog if gallery system fails"""
+    global RECENT_DIRECTORY_TARGET
+    
     if PREVIEW:
         PREVIEW.withdraw()
-    clear_face_reference()
-    if target_path is None:
-        target_path = ctk.filedialog.askopenfilename(
-            title='Select target media',
-            initialdir=RECENT_DIRECTORY_TARGET,
-            filetypes=[
-                ("All Media Files", "*.jpg *.jpeg *.png *.bmp *.gif *.mp4 *.avi *.mov *.mkv"),
-                ("Image Files", "*.jpg *.jpeg *.png *.bmp *.gif"),
-                ("Video Files", "*.mp4 *.avi *.mov *.mkv"),
-                ("All Files", "*.*")
-            ]
-        )
+    
+    target_path = ctk.filedialog.askopenfilename(
+        title='Select target media',
+        initialdir=RECENT_DIRECTORY_TARGET,
+        filetypes=[
+            ("All Media Files", "*.jpg *.jpeg *.png *.bmp *.gif *.mp4 *.avi *.mov *.mkv"),
+            ("Image Files", "*.jpg *.jpeg *.png *.bmp *.gif"),
+            ("Video Files", "*.mp4 *.avi *.mov *.mkv"),
+            ("All Files", "*.*")
+        ]
+    )
+    
+    _process_target_path(target_path)
+
+
+def _process_target_path(target_path: str) -> None:
+    """Process the selected target path and update UI"""
+    global RECENT_DIRECTORY_TARGET
     
     # Handle drag and drop - clean the path
     if target_path:
@@ -679,6 +781,7 @@ def select_target_path(target_path: Optional[str] = None) -> None:
             RECENT_DIRECTORY_TARGET = os.path.dirname(roop.globals.target_path)
             image = render_image_preview(roop.globals.target_path, (250, 250))
             target_label.configure(image=image, text="")
+            update_status(f"Selected image: {os.path.basename(target_path)}")
         except Exception as e:
             print(f"Error loading target image: {e}")
             roop.globals.target_path = None
@@ -689,6 +792,7 @@ def select_target_path(target_path: Optional[str] = None) -> None:
             RECENT_DIRECTORY_TARGET = os.path.dirname(roop.globals.target_path)
             video_frame = render_video_preview(target_path, (250, 250))
             target_label.configure(image=video_frame, text="")
+            update_status(f"Selected video: {os.path.basename(target_path)}")
         except Exception as e:
             print(f"Error loading target video: {e}")
             roop.globals.target_path = None
@@ -696,6 +800,19 @@ def select_target_path(target_path: Optional[str] = None) -> None:
     else:
         roop.globals.target_path = None
         target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬")
+
+
+def select_target_path(target_path: Optional[str] = None) -> None:
+    global RECENT_DIRECTORY_TARGET
+    if target_path:
+        # For drag-and-drop or manual input, behave as before
+        if PREVIEW:
+            PREVIEW.withdraw()
+        clear_face_reference()
+        _process_target_path(target_path)
+    else:
+        # Use your new gallery UI when no file path is given
+        show_category_gallery()
 
 
 def select_output_path(start: Callable[[], None]) -> None:
