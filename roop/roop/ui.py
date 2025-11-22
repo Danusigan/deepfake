@@ -1,15 +1,13 @@
+"""
+File: roop/ui.py - Replace entire file
+"""
 from typing import Any, Callable, Tuple, Optional
 import cv2
 import customtkinter as ctk
-import os
-import sys
-import webbrowser
+import os, sys, tempfile, time
 from PIL import Image, ImageOps
 from tkinterdnd2 import TkinterDnD, DND_ALL
-import time
-import tempfile
 
-# Assuming these imports and global variables are available in the runtime environment
 import roop.globals
 import roop.metadata
 from roop.capturer import get_video_frame, get_video_frame_total
@@ -18,759 +16,616 @@ from roop.face_reference import get_face_reference, set_face_reference, clear_fa
 from roop.predictor import predict_frame, clear_predictor
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import is_image, is_video, resolve_relative_path
-# NEW IMPORT: Must import the new qr_generator file
 from roop.qr_generator import generate_qr_code
 
+# Globals
 ROOT = None
-ROOT_HEIGHT = 700
-ROOT_WIDTH = 1100
-
 PREVIEW = None
-PREVIEW_MAX_HEIGHT = 700
-PREVIEW_MAX_WIDTH = 1200
+CANVAS = None
+RECENT_DIRECTORY_SOURCE = RECENT_DIRECTORY_TARGET = RECENT_DIRECTORY_OUTPUT = None
 
-RECENT_DIRECTORY_SOURCE = None
-RECENT_DIRECTORY_TARGET = None
-RECENT_DIRECTORY_OUTPUT = None
+# Camera - using simple approach
+CAM_OBJECT = None
+CAM_IS_RUNNING = False
+CAM_AFTER_ID = None
+CAM_FRAME_DATA = None
 
-# NEW GLOBAL VARIABLES FOR CAMERA
-CAPTURER = None
-IS_WEBCAM_ACTIVE = False
-CAPTURED_FRAME = None # Stores the numpy array of the captured face
-WEBCAM_LOOP_ID = None # Stores the ID of the ROOT.after loop
-
-preview_label = None
-preview_slider = None
-source_label = None
-target_label = None
-status_label = None
-main_frame = None
-canvas = None
-scrollbar = None
-# NEW LABELS
-capture_button = None
-qr_code_label = None
+# UI Elements
+preview_label = preview_slider = source_label = target_label = None
+status_label = capture_btn = camera_switch = qr_code_label = None
+camera_switch_var = None
 
 
-# todo: remove by native support -> https://github.com/TomSchimansky/CustomTkinter/issues/934
 class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.TkdndVersion = TkinterDnD._require(self)
 
 
 def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global ROOT, PREVIEW, CAPTURER, IS_WEBCAM_ACTIVE
-
+    global ROOT, PREVIEW
     ROOT = create_root(start, destroy)
     PREVIEW = create_preview(ROOT)
-
-    # Initialize webcam capture
-    try:
-        CAPTURER = cv2.VideoCapture(0) # 0 for default camera
-        if CAPTURER.isOpened():
-            IS_WEBCAM_ACTIVE = True
-            update_webcam_feed()
-            update_status("Webcam connected. Capture your source face!")
-        else:
-            update_status("Error: Could not open webcam (Index 0). Falling back to file selection.")
-            source_label.configure(text="Drag & Drop\nor Click to Select\n\n📸")
-            capture_button.configure(text='Webcam Unavailable', state='disabled')
-            
-    except Exception as e:
-        print(f"Webcam initialization error: {e}")
-        IS_WEBCAM_ACTIVE = False
-        source_label.configure(text="Drag & Drop\nor Click to Select\n\n📸")
-        capture_button.configure(text='Webcam Unavailable', state='disabled')
-
+    ROOT.withdraw()
+    ROOT.after(50, lambda: (ROOT.deiconify(), ROOT.lift(), ROOT.focus_force(),
+                            ROOT.attributes('-topmost', True)))
+    ROOT.after(300, lambda: ROOT.attributes('-topmost', False))
+    update_status("Ready. Toggle camera ON or drag & drop image.")
     return ROOT
 
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label, main_frame, canvas, scrollbar, capture_button, qr_code_label
+    global source_label, target_label, status_label, capture_btn, camera_switch, qr_code_label
+    global CANVAS, camera_switch_var
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('dark')
-    
-    try:
-        ctk.set_default_color_theme(resolve_relative_path('ui.json'))
-    except Exception:
-        # Fallback theme if ui.json fails
-        ctk.set_default_color_theme("blue")
+    try: ctk.set_default_color_theme(resolve_relative_path('ui.json'))
+    except: ctk.set_default_color_theme("blue")
 
     root = CTk()
-    root.minsize(ROOT_WIDTH, ROOT_HEIGHT)
+    root.minsize(1100, 750)
     root.title(f'{roop.metadata.name} {roop.metadata.version}')
-    root.configure()
-    # Ensure camera is released on destruction
-    root.protocol('WM_DELETE_WINDOW', lambda: (release_webcam(), destroy())) 
+    root.protocol('WM_DELETE_WINDOW', lambda: (destroy_camera(), destroy()))
 
-    # Create canvas and scrollbar
-    canvas = ctk.CTkCanvas(root, highlightthickness=0) 
-    scrollbar = ctk.CTkScrollbar(root, orientation="vertical", command=canvas.yview)
-    main_frame = ctk.CTkFrame(canvas)
-
-    canvas_window_id = canvas.create_window((0, 0), window=main_frame, anchor="nw")
-
-    main_frame.bind(
-        "<Configure>",
-        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
-
-    def update_main_frame_width(event):
-        canvas.itemconfig(canvas_window_id, width=event.width)
-
-    canvas.bind('<Configure>', update_main_frame_width)
-    canvas.configure(yscrollcommand=scrollbar.set)
-
-    canvas.pack(side="left", fill="both", expand=True)
+    # Scrollable canvas
+    CANVAS = ctk.CTkCanvas(root, highlightthickness=0, bg='#0B111D')
+    scrollbar = ctk.CTkScrollbar(root, orientation="vertical", command=CANVAS.yview)
+    main_frame = ctk.CTkFrame(CANVAS, fg_color="#0B111D")
+    
+    cid = CANVAS.create_window((0, 0), window=main_frame, anchor="nw")
+    main_frame.bind("<Configure>", lambda e: CANVAS.configure(scrollregion=CANVAS.bbox("all")))
+    CANVAS.bind('<Configure>', lambda e: CANVAS.itemconfig(cid, width=e.width))
+    CANVAS.configure(yscrollcommand=scrollbar.set)
+    CANVAS.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
-
-    # Bind mouse wheel
-    def _on_mousewheel(event):
-        canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-    canvas.bind("<MouseWheel>", _on_mousewheel)
-    main_frame.bind("<MouseWheel>", _on_mousewheel)
     
-    # Bind mousewheel to all child widgets recursively
-    def bind_mousewheel_to_children(widget):
-        widget.bind("<MouseWheel>", _on_mousewheel)
-        for child in widget.winfo_children():
-            bind_mousewheel_to_children(child)
+    # Global scroll
+    def scroll(e): CANVAS.yview_scroll(int(-1*(e.delta/120)), "units")
+    root.bind_all("<MouseWheel>", scroll)
+    root.bind_all("<Button-4>", lambda e: CANVAS.yview_scroll(-1, "units"))
+    root.bind_all("<Button-5>", lambda e: CANVAS.yview_scroll(1, "units"))
+
+    # Header
+    header = ctk.CTkFrame(main_frame, fg_color="#0B111D", height=80)
+    header.pack(fill="x")
+    header.pack_propagate(False)
+    ctk.CTkLabel(header, text=f"🎭 {roop.metadata.name}", font=("Segoe UI", 30, "bold"),
+                 text_color="#00A8A8").pack(pady=20)
+
+    # Content
+    content = ctk.CTkFrame(main_frame, fg_color="#0B111D")
+    content.pack(fill="both", expand=True, padx=30, pady=20)
+
+    # Cards container - SAME WIDTH using uniform
+    cards = ctk.CTkFrame(content, fg_color="transparent")
+    cards.pack(fill="x", pady=(0, 20))
+    cards.grid_columnconfigure(0, weight=1, uniform="cards")
+    cards.grid_columnconfigure(1, weight=1, uniform="cards")
+
+    # ============ SOURCE CARD ============
+    src_card = ctk.CTkFrame(cards, fg_color="#131826", corner_radius=20, border_width=2, border_color="#00A8A8")
+    src_card.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
     
-    # We'll call this after creating all widgets
-    def finalize_bindings():
-        bind_mousewheel_to_children(main_frame)
-
-    # Header with gradient-like effect - NEW COLOR: Deep Navy/Indigo
-    header_frame = ctk.CTkFrame(main_frame, fg_color=("#101828", "#0B111D"), corner_radius=0, height=80)
-    header_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
-    header_frame.grid_propagate(False)
+    # Header with toggle
+    src_header = ctk.CTkFrame(src_card, fg_color="transparent")
+    src_header.pack(fill="x", padx=20, pady=(20, 15))
     
-    title_label = ctk.CTkLabel(header_frame, 
-                             text=f"🎭 {roop.metadata.name}", 
-                             font=("Segoe UI", 32, "bold"),
-                             # NEW PRIMARY ACCENT COLOR: Teal/Cyan
-                             text_color=("#00FFFF", "#00A8A8"))
-    title_label.pack(pady=20)
-
-    # Main content area
-    content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-    content_frame.grid(row=1, column=0, columnspan=2, padx=30, pady=20, sticky="nsew")
-
-    # Media Upload Section with modern cards
-    upload_container = ctk.CTkFrame(content_frame, fg_color="transparent")
-    upload_container.pack(fill="x", pady=(0, 20))
+    ctk.CTkLabel(src_header, text="👤 Source Face", font=("Segoe UI", 18, "bold"),
+                 text_color="#00A8A8").pack(side="left")
     
-    upload_container.grid_columnconfigure(0, weight=1)
-    upload_container.grid_columnconfigure(1, weight=1)
-
-    # --- Source Card (Modified for Webcam) ---
-    source_card = ctk.CTkFrame(upload_container, 
-                               fg_color=("#1A2033", "#131826"),
-                               corner_radius=20,
-                               border_width=2,
-                               border_color=("#00FFFF", "#00A8A8"))
-    source_card.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-
-    source_title = ctk.CTkLabel(source_card, 
-                                 text="👤 The face you want to swap",
-                                 font=("Segoe UI", 18, "bold"),
-                                 text_color=("#00FFFF", "#00A8A8"))
-    source_title.pack(pady=(20, 10))
-
-    # Webcam/Image Display Label
-    source_label = ctk.CTkLabel(source_card, 
-                                 text="Initializing Webcam...",
-                                 fg_color=("#101828", "#0B111D"),
-                                 corner_radius=15,
-                                 font=("Segoe UI", 12),
-                                 text_color=("gray70", "gray70"),
-                                 height=180,
-                                 cursor="hand2")
-    source_label.pack(padx=20, pady=(0, 10), fill="both", expand=True)
+    # Camera toggle (right side)
+    cam_frame = ctk.CTkFrame(src_header, fg_color="transparent")
+    cam_frame.pack(side="right")
+    ctk.CTkLabel(cam_frame, text="📷", font=("Segoe UI", 14)).pack(side="left", padx=(0, 8))
+    camera_switch_var = ctk.BooleanVar(value=False)
+    camera_switch = ctk.CTkSwitch(cam_frame, text="", variable=camera_switch_var,
+                                   command=handle_camera_toggle, width=45,
+                                   progress_color="#00A8A8", button_color="#ffffff",
+                                   fg_color="#3a3a3a")
+    camera_switch.pack(side="left")
+    
+    # Source display
+    source_label = ctk.CTkLabel(src_card, text="Drag & Drop Image\nor Click to Select\n\n📸\n\nOr toggle camera ON",
+                                fg_color="#0B111D", corner_radius=15, cursor="hand2",
+                                font=("Segoe UI", 12), text_color="gray60", height=200)
+    source_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     source_label.drop_target_register(DND_ALL)
-    source_label.dnd_bind('<<Drop>>', lambda event: select_source_path(event.data))
-    source_label.bind('<Button-1>', lambda e: select_source_path()) # Fallback if webcam fails
+    source_label.dnd_bind('<<Drop>>', lambda e: select_source_path(e.data))
+    source_label.bind('<Button-1>', lambda e: select_source_path())
 
-    # Capture Button (NEW)
-    capture_button = ctk.CTkButton(source_card,
-                                   text='📸 Capture Face',
-                                   cursor='hand2',
-                                   command=capture_source_frame,
-                                   fg_color=("#00FFFF", "#00A8A8"),
-                                   hover_color=("#00A8A8", "#008585"),
-                                   text_color="black",
-                                   font=("Segoe UI", 12, "bold"),
-                                   corner_radius=10,
-                                   height=40)
-    capture_button.pack(padx=20, pady=(0, 20), fill="x")
+    # Capture button
+    capture_btn = ctk.CTkButton(src_card, text='📸 Capture Face', command=do_capture,
+                                fg_color="#00A8A8", hover_color="#008585", text_color="black",
+                                height=45, corner_radius=12, font=("Segoe UI", 13, "bold"),
+                                state='disabled')
+    capture_btn.pack(padx=20, pady=(0, 20), fill="x")
+
+    # ============ TARGET CARD ============
+    tgt_card = ctk.CTkFrame(cards, fg_color="#131826", corner_radius=20, border_width=2, border_color="#C6438D")
+    tgt_card.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
     
-    # --- Target Card (Same Logic as before) ---
-    target_card = ctk.CTkFrame(upload_container, 
-                               fg_color=("#1A2033", "#131826"),
-                               corner_radius=20,
-                               border_width=2,
-                               border_color=("#FF69B4", "#C6438D"))
-    target_card.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-
-    target_title = ctk.CTkLabel(target_card, 
-                                 text="🎯 The photo/video want to replace face ",
-                                 font=("Segoe UI", 18, "bold"),
-                                 text_color=("#FF69B4", "#C6438D"))
-    target_title.pack(pady=(20, 10))
-
-    target_label = ctk.CTkLabel(target_card, 
-                                 text="Drag & Drop\nor Click to Select\n\n🎬",
-                                 fg_color=("#101828", "#0B111D"),
-                                 corner_radius=15,
-                                 font=("Segoe UI", 12),
-                                 text_color=("gray70", "gray70"),
-                                 height=180,
-                                 cursor="hand2")
+    # Header
+    tgt_header = ctk.CTkFrame(tgt_card, fg_color="transparent")
+    tgt_header.pack(fill="x", padx=20, pady=(20, 15))
+    ctk.CTkLabel(tgt_header, text="🎯 Target Media", font=("Segoe UI", 18, "bold"),
+                 text_color="#C6438D").pack(side="left")
+    
+    # Target display
+    target_label = ctk.CTkLabel(tgt_card, text="Drag & Drop\nor Click to Select\n\n🎬\n\nImage or Video",
+                                fg_color="#0B111D", corner_radius=15, cursor="hand2",
+                                font=("Segoe UI", 12), text_color="gray60", height=200)
     target_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     target_label.drop_target_register(DND_ALL)
-    target_label.dnd_bind('<<Drop>>', lambda event: select_target_path(event.data))
+    target_label.dnd_bind('<<Drop>>', lambda e: select_target_path(e.data))
     target_label.bind('<Button-1>', lambda e: select_target_path())
     
-    if roop.globals.target_path:
-        select_target_path(roop.globals.target_path)
+    # Browse button
+    ctk.CTkButton(tgt_card, text='📁 Browse Files', command=select_target_path,
+                  fg_color="#C6438D", hover_color="#A52A6D", height=45,
+                  corner_radius=12, font=("Segoe UI", 13, "bold")).pack(padx=20, pady=(0, 20), fill="x")
 
-    target_button = ctk.CTkButton(target_card, 
-                                   text='📁 Browse Files',
-                                   cursor='hand2',
-                                   command=lambda: select_target_path(),
-                                   fg_color=("#FF69B4", "#C6438D"),
-                                   hover_color=("#C6438D", "#A52A6D"),
-                                   text_color="white",
-                                   font=("Segoe UI", 12, "bold"),
-                                   corner_radius=10,
-                                   height=40)
-    target_button.pack(padx=20, pady=(0, 20), fill="x")
+    # Status
+    status_frame = ctk.CTkFrame(content, fg_color="#131826", corner_radius=12, height=55)
+    status_frame.pack(fill="x", pady=(0, 20))
+    status_frame.pack_propagate(False)
+    ctk.CTkLabel(status_frame, text="📊", font=("Segoe UI", 14)).pack(side="left", padx=(15, 5), pady=12)
+    status_label = ctk.CTkLabel(status_frame, text="Ready", font=("Segoe UI", 13), text_color="#7CFC00")
+    status_label.pack(side="left", padx=5, pady=12)
 
-    # Processing Log (Same Logic as before)
-    progress_frame = ctk.CTkFrame(content_frame,
-                                  fg_color=("#1A2033", "#131826"),
-                                  corner_radius=10,
-                                  border_width=1,
-                                  border_color=("#00FFFF", "#00A8A8"))
-    progress_frame.pack(fill="x", pady=(0, 20))
+    # Output section
+    out_frame = ctk.CTkFrame(content, fg_color="#131826", corner_radius=15)
+    out_frame.pack(fill="x", pady=(0, 20))
+    ctk.CTkLabel(out_frame, text="✨ Output & QR Code", font=("Segoe UI", 16, "bold"),
+                 text_color="#6AA84F").pack(pady=(15, 10))
     
-    progress_header = ctk.CTkFrame(progress_frame, fg_color="transparent")
-    progress_header.pack(fill="x", padx=15, pady=(10, 5))
+    out_grid = ctk.CTkFrame(out_frame, fg_color="transparent")
+    out_grid.pack(padx=20, pady=(0, 20), fill="x")
+    out_grid.grid_columnconfigure(0, weight=1, uniform="out")
+    out_grid.grid_columnconfigure(1, weight=1, uniform="out")
     
-    ctk.CTkLabel(progress_header,
-                 text="📊 Processing Status",
-                 font=("Segoe UI", 13, "bold"),
-                 text_color=("#00FFFF", "#00A8A8")).pack(side="left")
-    
-    progress_text = ctk.CTkTextbox(progress_frame,
-                                   height=80,
-                                   font=("Segoe UI", 10),
-                                   fg_color=("#101828", "#0B111D"),
-                                   text_color=("#7CFC00", "#7CFC00"), # Bright Green for log success
-                                   border_width=0,
-                                   wrap="word")
-    progress_text.pack(fill="x", padx=15, pady=(0, 10))
-    progress_text.insert("1.0", "⚡ Ready - Waiting to start processing...")
-    progress_text.configure(state="disabled")
-    
-    # Store reference globally
-    root._progress_text = progress_text
-
-    # Output & QR Code Section (MODIFIED)
-    output_preview_frame = ctk.CTkFrame(content_frame,
-                                        fg_color=("#1A2033", "#131826"),
-                                        corner_radius=15,
-                                        border_width=2,
-                                        border_color=("#7CFC00", "#6AA84F"))
-    output_preview_frame.pack(fill="x", pady=(0, 20))
-    
-    output_header = ctk.CTkLabel(output_preview_frame,
-                                 text="✨ After swapped face & Share QR",
-                                 font=("Segoe UI", 16, "bold"),
-                                 text_color=("#7CFC00", "#6AA84F"))
-    output_header.pack(pady=(20, 10))
-    
-    output_content_frame = ctk.CTkFrame(output_preview_frame, fg_color="transparent")
-    output_content_frame.pack(padx=20, pady=(0, 20), fill="x", expand=True)
-    output_content_frame.grid_columnconfigure(0, weight=1)
-    output_content_frame.grid_columnconfigure(1, weight=1)
-
-    # Output Display
-    output_label = ctk.CTkLabel(output_content_frame,
-                                text="Output will appear here\nafter processing",
-                                fg_color=("#101828", "#0B111D"),
-                                corner_radius=15,
-                                font=("Segoe UI", 12),
-                                text_color=("gray70", "gray70"),
-                                height=250)
+    output_label = ctk.CTkLabel(out_grid, text="Output preview\nwill appear here", fg_color="#0B111D",
+                                corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
     output_label.grid(row=0, column=0, padx=10, sticky="nsew")
     root._output_label = output_label
-
-    # QR Code Display (NEW)
-    qr_code_label = ctk.CTkLabel(output_content_frame,
-                                text="QR Code for Sharing\n(Scan to Access Output)",
-                                fg_color=("#101828", "#0B111D"),
-                                corner_radius=15,
-                                font=("Segoe UI", 12),
-                                text_color=("gray70", "gray70"),
-                                height=250)
-    qr_code_label.grid(row=0, column=1, padx=10, sticky="nsew")
     
-    # Settings Panel, Action Button, Status Label, Footer (retained elements)
-    settings_frame = ctk.CTkFrame(content_frame, 
-                                  fg_color=("#1A2033", "#131826"),
-                                  corner_radius=15)
+    qr_code_label = ctk.CTkLabel(out_grid, text="QR Code\nfor sharing", fg_color="#0B111D",
+                                  corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
+    qr_code_label.grid(row=0, column=1, padx=10, sticky="nsew")
+
+    # ============ SETTINGS PANEL (Like Original) ============
+    settings_frame = ctk.CTkFrame(content, fg_color="#131826", corner_radius=15)
     settings_frame.pack(fill="x", pady=(0, 20))
 
-    settings_header = ctk.CTkLabel(settings_frame, 
-                                     text="⚙️ Advanced Settings",
-                                     font=("Segoe UI", 16, "bold"),
-                                     text_color=("#00FFFF", "#00A8A8"))
-    settings_header.pack(pady=(15, 10), padx=20, anchor="w")
+    ctk.CTkLabel(settings_frame, text="⚙️ Advanced Settings", font=("Segoe UI", 16, "bold"),
+                 text_color="#00A8A8").pack(pady=(15, 10), padx=20, anchor="w")
 
     settings_grid = ctk.CTkFrame(settings_frame, fg_color="transparent")
     settings_grid.pack(fill="x", padx=20, pady=(0, 15))
-    
-    settings_grid.grid_columnconfigure(0, weight=1)
-    settings_grid.grid_columnconfigure(1, weight=1)
+    settings_grid.grid_columnconfigure(0, weight=1, uniform="sett")
+    settings_grid.grid_columnconfigure(1, weight=1, uniform="sett")
 
-    # General Settings
-    general_section = ctk.CTkFrame(settings_grid, fg_color=("#101828", "#0B111D"), corner_radius=10)
+    # General Settings (Left)
+    general_section = ctk.CTkFrame(settings_grid, fg_color="#0B111D", corner_radius=10)
     general_section.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-    
+
     ctk.CTkLabel(general_section, text="🎬 Video Options", font=("Segoe UI", 13, "bold")).pack(pady=(15, 10), padx=15, anchor="w")
 
     keep_fps_value = ctk.BooleanVar(value=roop.globals.keep_fps)
-    keep_fps_switch = ctk.CTkSwitch(general_section, 
-                                    text='Keep Original FPS',
-                                    variable=keep_fps_value,
-                                    cursor='hand2',
-                                    command=lambda: setattr(roop.globals, 'keep_fps', keep_fps_value.get()),
-                                    progress_color=("#00FFFF", "#00A8A8"))
-    keep_fps_switch.pack(pady=5, padx=15, anchor="w")
+    ctk.CTkSwitch(general_section, text='Keep Original FPS', variable=keep_fps_value, cursor='hand2',
+                  command=lambda: setattr(roop.globals, 'keep_fps', keep_fps_value.get()),
+                  progress_color="#00A8A8").pack(pady=5, padx=15, anchor="w")
 
     skip_audio_value = ctk.BooleanVar(value=roop.globals.skip_audio)
-    skip_audio_switch = ctk.CTkSwitch(general_section, 
-                                       text='Mute Audio',
-                                       variable=skip_audio_value,
-                                       cursor='hand2',
-                                       command=lambda: setattr(roop.globals, 'skip_audio', skip_audio_value.get()),
-                                       progress_color=("#00FFFF", "#00A8A8"))
-    skip_audio_switch.pack(pady=5, padx=15, anchor="w")
+    ctk.CTkSwitch(general_section, text='Mute Audio', variable=skip_audio_value, cursor='hand2',
+                  command=lambda: setattr(roop.globals, 'skip_audio', skip_audio_value.get()),
+                  progress_color="#00A8A8").pack(pady=5, padx=15, anchor="w")
 
     keep_frames_value = ctk.BooleanVar(value=roop.globals.keep_frames)
-    keep_frames_switch = ctk.CTkSwitch(general_section, 
-                                        text='Keep Temp Frames',
-                                        variable=keep_frames_value,
-                                        cursor='hand2',
-                                        command=lambda: setattr(roop.globals, 'keep_frames', keep_frames_value.get()),
-                                        progress_color=("#00FFFF", "#00A8A8"))
-    keep_frames_switch.pack(pady=(5, 15), padx=15, anchor="w")
+    ctk.CTkSwitch(general_section, text='Keep Temp Frames', variable=keep_frames_value, cursor='hand2',
+                  command=lambda: setattr(roop.globals, 'keep_frames', keep_frames_value.get()),
+                  progress_color="#00A8A8").pack(pady=(5, 15), padx=15, anchor="w")
 
-    # Face Detection Settings
-    face_section = ctk.CTkFrame(settings_grid, fg_color=("#101828", "#0B111D"), corner_radius=10)
+    # Face Detection Settings (Right)
+    face_section = ctk.CTkFrame(settings_grid, fg_color="#0B111D", corner_radius=10)
     face_section.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-    
+
     ctk.CTkLabel(face_section, text="👥 Face Detection", font=("Segoe UI", 13, "bold")).pack(pady=(15, 10), padx=15, anchor="w")
 
     many_faces_value = ctk.BooleanVar(value=roop.globals.many_faces)
-    many_faces_switch = ctk.CTkSwitch(face_section, 
-                                       text='Process All Faces',
-                                       variable=many_faces_value,
-                                       cursor='hand2',
-                                       command=lambda: setattr(roop.globals, 'many_faces', many_faces_value.get()),
-                                       progress_color=("#FF69B4", "#C6438D"))
-    many_faces_switch.pack(pady=5, padx=15, anchor="w")
+    ctk.CTkSwitch(face_section, text='Process All Faces', variable=many_faces_value, cursor='hand2',
+                  command=lambda: setattr(roop.globals, 'many_faces', many_faces_value.get()),
+                  progress_color="#C6438D").pack(pady=5, padx=15, anchor="w")
 
     ref_frame = ctk.CTkFrame(face_section, fg_color="transparent")
     ref_frame.pack(pady=5, padx=15, fill="x")
-    
     ctk.CTkLabel(ref_frame, text="Face Index:", font=("Segoe UI", 11)).pack(side="left")
     reference_entry = ctk.CTkEntry(ref_frame, width=60, placeholder_text="0")
     reference_entry.pack(side="left", padx=(10, 0))
     reference_entry.insert(0, "0")
 
-    ctk.CTkLabel(face_section, 
-                 text="Threshold: 0.5", 
-                 font=("Segoe UI", 10),
+    ctk.CTkLabel(face_section, text="Similar Face Distance: 0.85", font=("Segoe UI", 10),
                  text_color="gray60").pack(pady=(5, 15), padx=15, anchor="w")
-    
-    # Performance Settings
-    perf_section = ctk.CTkFrame(settings_grid, fg_color=("#101828", "#0B111D"), corner_radius=10)
+
+    # Performance Settings (Left Bottom)
+    perf_section = ctk.CTkFrame(settings_grid, fg_color="#0B111D", corner_radius=10)
     perf_section.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-    
+
     ctk.CTkLabel(perf_section, text="⚡ Performance", font=("Segoe UI", 13, "bold")).pack(pady=(15, 10), padx=15, anchor="w")
 
     thread_frame = ctk.CTkFrame(perf_section, fg_color="transparent")
     thread_frame.pack(pady=5, padx=15, fill="x")
-    
-    ctk.CTkLabel(thread_frame, text="Threads:", font=("Segoe UI", 11)).pack(anchor="w")
-    threads_slider = ctk.CTkSlider(thread_frame, from_=1, to=16, number_of_steps=15,
-                                    progress_color=("#00FFFF", "#00A8A8"))
-    threads_slider.set(8)
+    ctk.CTkLabel(thread_frame, text="Execution Threads:", font=("Segoe UI", 11)).pack(anchor="w")
+    threads_slider = ctk.CTkSlider(thread_frame, from_=1, to=16, number_of_steps=15, progress_color="#00A8A8")
+    threads_slider.set(roop.globals.execution_threads if hasattr(roop.globals, 'execution_threads') else 8)
     threads_slider.pack(fill="x", pady=5)
 
     mem_frame = ctk.CTkFrame(perf_section, fg_color="transparent")
     mem_frame.pack(pady=5, padx=15, fill="x")
-    
-    ctk.CTkLabel(mem_frame, text="Memory (GB):", font=("Segoe UI", 11)).pack(anchor="w")
-    memory_slider = ctk.CTkSlider(mem_frame, from_=1, to=16, number_of_steps=15,
-                                    progress_color=("#00FFFF", "#00A8A8"))
-    memory_slider.set(4)
+    ctk.CTkLabel(mem_frame, text="Max Memory (GB):", font=("Segoe UI", 11)).pack(anchor="w")
+    memory_slider = ctk.CTkSlider(mem_frame, from_=1, to=64, number_of_steps=63, progress_color="#00A8A8")
+    memory_slider.set(roop.globals.max_memory if roop.globals.max_memory else 8)
     memory_slider.pack(fill="x", pady=(5, 15))
 
-    # Output Settings
-    output_section = ctk.CTkFrame(settings_grid, fg_color=("#101828", "#0B111D"), corner_radius=10)
+    # Output Settings (Right Bottom)
+    output_section = ctk.CTkFrame(settings_grid, fg_color="#0B111D", corner_radius=10)
     output_section.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
-    
-    ctk.CTkLabel(output_section, text="💾 Output", font=("Segoe UI", 13, "bold")).pack(pady=(15, 10), padx=15, anchor="w")
+
+    ctk.CTkLabel(output_section, text="💾 Output Options", font=("Segoe UI", 13, "bold")).pack(pady=(15, 10), padx=15, anchor="w")
 
     provider_frame = ctk.CTkFrame(output_section, fg_color="transparent")
     provider_frame.pack(pady=5, padx=15, fill="x")
-    
-    ctk.CTkLabel(provider_frame, text="Provider:", font=("Segoe UI", 11)).pack(anchor="w")
-    provider_combobox = ctk.CTkComboBox(provider_frame, 
-                                         values=["CPU", "CUDA", "OpenVINO"],
-                                         button_color=("#00FFFF", "#00A8A8"),
-                                         button_hover_color=("#00A8A8", "#008585"))
-    provider_combobox.set("CPU")
-    provider_combobox.pack(fill="x", pady=5)
+    ctk.CTkLabel(provider_frame, text="Execution Provider:", font=("Segoe UI", 11)).pack(anchor="w")
+    provider_combo = ctk.CTkComboBox(provider_frame, values=["cpu", "cuda", "coreml", "openvino"],
+                                      button_color="#00A8A8", button_hover_color="#008585")
+    provider_combo.set("cpu")
+    provider_combo.pack(fill="x", pady=5)
 
     quality_frame = ctk.CTkFrame(output_section, fg_color="transparent")
     quality_frame.pack(pady=5, padx=15, fill="x")
-    
-    ctk.CTkLabel(quality_frame, text="Quality (CRF):", font=("Segoe UI", 11)).pack(anchor="w")
-    quality_slider = ctk.CTkSlider(quality_frame, from_=0, to=51, number_of_steps=51,
-                                    progress_color=("#FF69B4", "#C6438D"))
-    quality_slider.set(23)
+    ctk.CTkLabel(quality_frame, text="Output Quality:", font=("Segoe UI", 11)).pack(anchor="w")
+    quality_slider = ctk.CTkSlider(quality_frame, from_=0, to=100, number_of_steps=100, progress_color="#C6438D")
+    quality_slider.set(roop.globals.output_video_quality if hasattr(roop.globals, 'output_video_quality') else 35)
     quality_slider.pack(fill="x", pady=(5, 15))
 
-    # Action Button
-    action_container = ctk.CTkFrame(content_frame, fg_color="transparent")
-    action_container.pack(fill="x", pady=(10, 0))
+    # Start button
+    ctk.CTkButton(content, text='🚀 Start Processing', command=lambda: select_output_path(start),
+                  fg_color="#6AA84F", hover_color="#588E3E", text_color="black",
+                  height=50, width=250, corner_radius=12, font=("Segoe UI", 15, "bold")).pack(pady=25)
 
-    button_wrapper = ctk.CTkFrame(action_container, fg_color="transparent")
-    button_wrapper.pack(anchor="center")
-
-    start_button = ctk.CTkButton(button_wrapper, 
-                                 text='🚀 Start Processing',
-                                 cursor='hand2',
-                                 command=lambda: select_output_path(start),
-                                 fg_color=("#7CFC00", "#6AA84F"),
-                                 hover_color=("#6AA84F", "#588E3E"),
-                                 font=("Segoe UI", 12, "bold"),
-                                 text_color="black",
-                                 height=40,
-                                 width=200,
-                                 corner_radius=10)
-    start_button.pack(pady=10)
-
-    # Status Label
-    status_label = ctk.CTkLabel(action_container, 
-                                 text="Ready to process",
-                                 font=("Segoe UI", 10),
-                                 text_color="gray60")
-    status_label.pack(pady=5)
-
-    # Footer
-    footer_frame = ctk.CTkFrame(main_frame, fg_color="transparent", height=40)
-    footer_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
-    
-    footer_label = ctk.CTkLabel(footer_frame, 
-                                 text=f"v{roop.metadata.version} | Powered by AI",
-                                 font=("Segoe UI", 9),
-                                 text_color="gray50")
-    footer_label.pack(pady=10)
-
-    main_frame.grid_columnconfigure(0, weight=1)
-    main_frame.grid_columnconfigure(1, weight=1)
-    main_frame.grid_rowconfigure(1, weight=1)
-
-    # Apply mousewheel binding to all widgets
-    finalize_bindings()
+    ctk.CTkLabel(content, text=f"v{roop.metadata.version} | Powered by AI", 
+                 font=("Segoe UI", 10), text_color="gray50").pack(pady=(5, 20))
 
     return root
 
 
-def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
+def create_preview(parent):
     global preview_label, preview_slider
-
     preview = ctk.CTkToplevel(parent)
     preview.withdraw()
-    preview.configure()
-    preview.protocol('WM_DELETE_WINDOW', lambda: toggle_preview())
-    preview.resizable(width=False, height=False)
-
+    preview.protocol('WM_DELETE_WINDOW', toggle_preview)
+    preview.resizable(False, False)
     preview_label = ctk.CTkLabel(preview, text=None)
     preview_label.pack(fill='both', expand=True)
-
-    preview_slider = ctk.CTkSlider(preview, from_=0, to=0, command=lambda frame_value: update_preview(frame_value))
-
-    preview.bind('<Up>', lambda event: update_face_reference(1))
-    preview.bind('<Down>', lambda event: update_face_reference(-1))
+    preview_slider = ctk.CTkSlider(preview, from_=0, to=0, command=lambda v: update_preview(v))
+    preview.bind('<Up>', lambda e: update_face_reference(1))
+    preview.bind('<Down>', lambda e: update_face_reference(-1))
     return preview
 
-# --- NEW WEBCAM LOGIC ---
 
-def release_webcam() -> None:
-    global IS_WEBCAM_ACTIVE, CAPTURER, WEBCAM_LOOP_ID
-    
-    if WEBCAM_LOOP_ID:
-        ROOT.after_cancel(WEBCAM_LOOP_ID)
-    
-    if CAPTURER and CAPTURER.isOpened():
-        CAPTURER.release()
-    
-    IS_WEBCAM_ACTIVE = False
+# ==================== CAMERA FUNCTIONS ====================
 
-def capture_source_frame() -> None:
-    global IS_WEBCAM_ACTIVE, CAPTURED_FRAME
-    
-    if not CAPTURER or not CAPTURER.isOpened():
-        update_status("Webcam is not active.")
-        return
-
-    # Check for latest frame stored by the update loop
-    if CAPTURED_FRAME is None:
-        update_status("Error: Could not capture frame.")
-        return
-
-    # 1. Stop the live feed and prevent re-entry
-    if IS_WEBCAM_ACTIVE and WEBCAM_LOOP_ID:
-        ROOT.after_cancel(WEBCAM_LOOP_ID)
-        IS_WEBCAM_ACTIVE = False
-        capture_button.configure(text='🔄 Re-capture Face', fg_color="#FF69B4", hover_color="#C6438D", state='normal')
-
-    # 2. Save the captured frame to a temporary file for roop.globals
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, f"source_face_captured.png") # Changed filename to be simpler
-    
-    # Save the NumPy array (CAPTURED_FRAME) to a file
-    cv2.imwrite(temp_path, CAPTURED_FRAME)
-    
-    roop.globals.source_path = temp_path
-    
-    # 3. Display the static captured frame on the source_label
-    image = render_image_preview(roop.globals.source_path, (250, 250))
-    source_label.configure(image=image, text="")
-    update_status(f"Source face captured from webcam.")
-
-
-def update_webcam_feed() -> None:
-    global CAPTURER, IS_WEBCAM_ACTIVE, CAPTURED_FRAME, WEBCAM_LOOP_ID
-    
-    if not IS_WEBCAM_ACTIVE or not CAPTURER or not CAPTURER.isOpened():
-        return
-
-    # Read a frame from the camera
-    has_frame, frame = CAPTURER.read()
-    
-    if has_frame:
-        # Store the raw frame for the capture button
-        CAPTURED_FRAME = frame
-        
-        # Convert BGR (OpenCV) to RGB (PIL)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(rgb_frame)
-        
-        # Resize/fit to the preview label size (250x250 defined in create_root)
-        size = (250, 250)
-        image = ImageOps.fit(image, size, Image.LANCZOS)
-        
-        # Convert to CTkImage and update label
-        ctk_image = ctk.CTkImage(image, size=image.size)
-        source_label.configure(image=ctk_image, text="")
-        
-    # Repeat the loop every 30 milliseconds (approx 33 FPS)
-    WEBCAM_LOOP_ID = ROOT.after(30, update_webcam_feed)
-
-# --- END NEW WEBCAM LOGIC ---
-
-
-def update_status(text: str) -> None:
-    """Update the status in the processing log"""
-    global status_label
-    status_label.configure(text=text)
-    
-    # Update progress log if available
-    if hasattr(ROOT, '_progress_text'):
-        progress_text = ROOT._progress_text
-        progress_text.configure(state="normal")
-        
-        # Clear and show only latest status
-        progress_text.delete("1.0", "end")
-        progress_text.insert("1.0", f"⚡ {text}")
-        
-        progress_text.configure(state="disabled")
-    
-    ROOT.update()
-
-
-def select_source_path(source_path: Optional[str] = None) -> None:
-    global RECENT_DIRECTORY_SOURCE, IS_WEBCAM_ACTIVE
-    
-    # If webcam is active, disable it now since user is choosing a file
-    if IS_WEBCAM_ACTIVE and WEBCAM_LOOP_ID:
-        ROOT.after_cancel(WEBCAM_LOOP_ID)
-        IS_WEBCAM_ACTIVE = False
-        if capture_button:
-             capture_button.configure(text='Enable Webcam', fg_color="#00FFFF", hover_color="#00A8A8", state='normal', command=lambda: (setattr(globals(), 'IS_WEBCAM_ACTIVE', True), update_webcam_feed(), capture_button.configure(text='📸 Capture Face', command=capture_source_frame, fg_color="#00FFFF")))
-
-    if PREVIEW:
-        PREVIEW.withdraw()
-    if source_path is None:
-        source_path = ctk.filedialog.askopenfilename(
-            title='Select source image',
-            initialdir=RECENT_DIRECTORY_SOURCE,
-            filetypes=[
-                ("Image Files", "*.jpg *.jpeg *.png *.bmp *.gif"),
-                ("All Files", "*.*")
-            ]
-        )
-    
-    # Handle drag and drop - clean the path
-    if source_path:
-        source_path = source_path.strip('{}').strip()
-        
-    if source_path and is_image(source_path):
+def stop_camera_feed():
+    """Stop camera feed loop only"""
+    global CAM_IS_RUNNING, CAM_AFTER_ID
+    CAM_IS_RUNNING = False
+    if CAM_AFTER_ID is not None:
         try:
-            roop.globals.source_path = source_path
-            RECENT_DIRECTORY_SOURCE = os.path.dirname(roop.globals.source_path)
-            image = render_image_preview(roop.globals.source_path, (250, 250))
-            source_label.configure(image=image, text="")
-        except Exception as e:
-            print(f"Error loading source image: {e}")
+            ROOT.after_cancel(CAM_AFTER_ID)
+        except:
+            pass
+        CAM_AFTER_ID = None
+
+
+def release_camera():
+    """Release camera hardware"""
+    global CAM_OBJECT, CAM_FRAME_DATA
+    stop_camera_feed()
+    if CAM_OBJECT is not None:
+        try:
+            CAM_OBJECT.release()
+        except:
+            pass
+        CAM_OBJECT = None
+    CAM_FRAME_DATA = None
+
+
+def destroy_camera():
+    """Full cleanup"""
+    release_camera()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
+
+
+def open_camera():
+    """Open camera fresh"""
+    global CAM_OBJECT
+    
+    # Release if exists
+    release_camera()
+    time.sleep(0.3)
+    
+    print("[DEBUG] Creating VideoCapture with DirectShow...")
+    # Open with DirectShow (best for Windows)
+    CAM_OBJECT = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    
+    if CAM_OBJECT is None or not CAM_OBJECT.isOpened():
+        print("[DEBUG] DirectShow failed, trying default...")
+        # Fallback to default
+        CAM_OBJECT = cv2.VideoCapture(0)
+    
+    if CAM_OBJECT is not None and CAM_OBJECT.isOpened():
+        CAM_OBJECT.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        CAM_OBJECT.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        # Test read
+        ret, frame = CAM_OBJECT.read()
+        print(f"[DEBUG] Test read: ret={ret}, frame shape={frame.shape if frame is not None else None}")
+        if ret:
+            return True
+    
+    print("[DEBUG] Camera open failed completely")
+    release_camera()
+    return False
+
+
+def handle_camera_toggle():
+    """Handle camera toggle - simple version"""
+    global CAM_IS_RUNNING
+    
+    if camera_switch_var.get():
+        # TURN ON
+        update_status("Opening camera...")
+        ROOT.update()
+        
+        print("[DEBUG] Attempting to open camera...")
+        if open_camera():
+            print("[DEBUG] Camera opened successfully")
+            CAM_IS_RUNNING = True
             roop.globals.source_path = None
-            source_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n📸")
+            capture_btn.configure(state='normal', text='📸 Capture Face', command=do_capture)
+            update_status("Camera ON - Capture when ready")
+            print("[DEBUG] Starting camera feed...")
+            start_camera_feed()
+        else:
+            print("[DEBUG] Failed to open camera")
+            camera_switch_var.set(False)
+            capture_btn.configure(state='disabled')
+            update_status("Cannot open camera!")
     else:
-        roop.globals.source_path = None
-        source_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n📸")
+        # TURN OFF
+        print("[DEBUG] Turning camera OFF")
+        release_camera()
+        capture_btn.configure(state='disabled', text='📸 Capture Face')
+        if not roop.globals.source_path:
+            source_label.configure(image=None, text="Drag & Drop Image\nor Click to Select\n\n📸\n\nOr toggle camera ON")
+        update_status("Camera OFF")
 
 
-def select_target_path(target_path: Optional[str] = None) -> None:
-    global RECENT_DIRECTORY_TARGET
+def start_camera_feed():
+    """Start the camera feed"""
+    global CAM_IS_RUNNING
+    print("[DEBUG] start_camera_feed called")
+    print(f"[DEBUG] source_label exists: {source_label is not None}")
+    CAM_IS_RUNNING = True
+    # Call first tick immediately
+    ROOT.after(100, camera_feed_tick)
 
-    if PREVIEW:
-        PREVIEW.withdraw()
-    clear_face_reference()
-    if target_path is None:
-        target_path = ctk.filedialog.askopenfilename(
-            title='Select target media',
-            initialdir=RECENT_DIRECTORY_TARGET,
-            filetypes=[
-                ("All Media Files", "*.jpg *.jpeg *.png *.bmp *.gif *.mp4 *.avi *.mov *.mkv"),
-                ("Image Files", "*.jpg *.jpeg *.png *.bmp *.gif"),
-                ("Video Files", "*.mp4 *.avi *.mov *.mkv"),
-                ("All Files", "*.*")
-            ]
-        )
+
+def camera_feed_tick():
+    """Single tick of camera feed"""
+    global CAM_AFTER_ID, CAM_FRAME_DATA, CAM_IMAGE_REF
     
-    # Handle drag and drop - clean the path
-    if target_path:
-        # Remove curly braces and extra whitespace that may come from drag-drop
-        target_path = target_path.strip('{}').strip()
-        
-    if target_path and is_image(target_path):
-        try:
-            roop.globals.target_path = target_path
-            RECENT_DIRECTORY_TARGET = os.path.dirname(roop.globals.target_path)
-            image = render_image_preview(roop.globals.target_path, (250, 250))
-            target_label.configure(image=image, text="")
-        except Exception as e:
-            print(f"Error loading target image: {e}")
-            roop.globals.target_path = None
-            target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬")
-    elif target_path and is_video(target_path):
-        try:
-            roop.globals.target_path = target_path
-            RECENT_DIRECTORY_TARGET = os.path.dirname(roop.globals.target_path)
-            video_frame = render_video_preview(target_path, (250, 250))
-            target_label.configure(image=video_frame, text="")
-        except Exception as e:
-            print(f"Error loading target video: {e}")
-            roop.globals.target_path = None
-            target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬")
-    else:
-        roop.globals.target_path = None
-        target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬")
-
-
-def select_output_path(start: Callable[[], None]) -> None:
-    global RECENT_DIRECTORY_OUTPUT
-
-    if is_image(roop.globals.target_path):
-        output_path = ctk.filedialog.asksaveasfilename(title='Save output image', defaultextension='.png', initialfile='output.png', initialdir=RECENT_DIRECTORY_OUTPUT)
-    elif is_video(roop.globals.target_path):
-        output_path = ctk.filedialog.asksaveasfilename(title='Save output video', defaultextension='.mp4', initialfile='output.mp4', initialdir=RECENT_DIRECTORY_OUTPUT)
-    else:
-        output_path = None
-    if output_path:
-        roop.globals.output_path = output_path
-        RECENT_DIRECTORY_OUTPUT = os.path.dirname(roop.globals.output_path)
-        start()
-        
-        # After processing completes, try to show output preview (moved QR logic to core.py after validation)
-        try:
-            if hasattr(ROOT, '_output_label') and os.path.exists(output_path):
-                if is_image(output_path):
-                    output_image = render_image_preview(output_path, (400, 400))
-                    ROOT._output_label.configure(image=output_image, text="")
-                elif is_video(output_path):
-                    output_frame = render_video_preview(output_path, (400, 400))
-                    ROOT._output_label.configure(image=output_frame, text="")
-        except Exception as e:
-            print(f"Could not display output preview: {e}")
-
-# --- NEW QR GENERATION FUNCTION ---
-def generate_qr_for_output(output_path: str) -> None:
-    """Uploads the file and generates a QR code pointing to the shareable URL."""
-    global qr_code_label
-
-    # --- SIMULATED SHARING LOGIC ---
-    # In a real app, this is where you would call your Firebase Storage upload function.
-    # E.g., shared_url = upload_to_firebase_storage(output_path)
-
-    # SIMULATION: Use a placeholder URL that mentions the output file name
-    shared_url = f"https://share.roop-output.com/{os.path.basename(output_path)}"
-
-    # Display the simulated sharing URL and generate QR code
-    qr_code_label.configure(text=f"Scan QR to download/view:\n{os.path.basename(output_path)}", text_color=("#7CFC00", "#6AA84F"))
+    # Check if should continue
+    if not CAM_IS_RUNNING:
+        print("[DEBUG] Feed tick: not running, stopping")
+        return
+    
+    if CAM_OBJECT is None or not CAM_OBJECT.isOpened():
+        print("[DEBUG] Feed tick: camera not available")
+        # Camera lost - try to recover once
+        if open_camera():
+            CAM_AFTER_ID = ROOT.after(50, camera_feed_tick)
+        else:
+            camera_switch_var.set(False)
+            capture_btn.configure(state='disabled')
+            source_label.configure(image=None, text="Camera lost!\n\nToggle to retry")
+            update_status("Camera disconnected")
+        return
     
     try:
-        # Generate and display the QR code image
-        qr_image = generate_qr_code(shared_url, (200, 200)) 
-        qr_code_label.configure(image=qr_image, text="")
+        ret, frame = CAM_OBJECT.read()
+        if ret and frame is not None:
+            CAM_FRAME_DATA = frame.copy()
+            # Convert BGR to RGB
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Create PIL Image
+            pil_img = Image.fromarray(rgb)
+            # Resize to fit
+            pil_img = ImageOps.fit(pil_img, (280, 180), Image.LANCZOS)
+            # Create CTkImage and KEEP REFERENCE
+            CAM_IMAGE_REF = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(280, 180))
+            # Update label
+            source_label.configure(image=CAM_IMAGE_REF, text="")
+            # Force update
+            source_label.update_idletasks()
     except Exception as e:
-        print(f"Error generating QR code: {e}")
-        qr_code_label.configure(image=None, text="QR Code Failed")
+        print(f"[DEBUG] Feed error: {e}")
+    
+    # Schedule next tick
+    if CAM_IS_RUNNING:
+        CAM_AFTER_ID = ROOT.after(40, camera_feed_tick)
 
 
-def render_image_preview(image_path: str, size: Tuple[int, int]) -> ctk.CTkImage:
-    image = Image.open(image_path)
-    if size:
-        image = ImageOps.fit(image, size, Image.LANCZOS)
-    return ctk.CTkImage(image, size=image.size)
+def do_capture():
+    """Capture current frame"""
+    global CAM_FRAME_DATA
+    
+    if CAM_FRAME_DATA is None:
+        update_status("No frame yet - wait a moment")
+        return
+    
+    # Stop feed but KEEP camera open
+    stop_camera_feed()
+    
+    # Save frame
+    path = os.path.join(tempfile.gettempdir(), f"roop_src_{int(time.time())}.png")
+    try:
+        cv2.imwrite(path, CAM_FRAME_DATA)
+        roop.globals.source_path = path
+        source_label.configure(image=render_image_preview(path, (280, 180)), text="")
+        capture_btn.configure(text='🔄 Re-capture', command=do_recapture)
+        update_status("Captured! Re-capture or start processing")
+    except Exception as e:
+        update_status(f"Error: {e}")
+        do_recapture()
 
 
-def render_video_preview(video_path: str, size: Tuple[int, int], frame_number: int = 0) -> ctk.CTkImage:
-    capture = cv2.VideoCapture(video_path)
-    if frame_number:
-        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-    has_frame, frame = capture.read()
-    if has_frame:
-        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        if size:
-            image = ImageOps.fit(image, size, Image.LANCZOS)
-        capture.release()
-        return ctk.CTkImage(image, size=image.size)
-    capture.release()
-    cv2.destroyAllWindows()
+def do_recapture():
+    """Re-capture - just restart feed (camera still open)"""
+    global CAM_FRAME_DATA
+    
+    if not camera_switch_var.get():
+        update_status("Turn camera ON first")
+        return
+    
+    CAM_FRAME_DATA = None
+    roop.globals.source_path = None
+    capture_btn.configure(text='📸 Capture Face', command=do_capture)
+    update_status("Camera ready")
+    start_camera_feed()
 
 
-def toggle_preview() -> None:
+# ==================== FILE FUNCTIONS ====================
+
+def update_status(text: str):
+    if status_label:
+        status_label.configure(text=text)
+    if ROOT:
+        ROOT.update_idletasks()
+
+
+def select_source_path(path: Optional[str] = None):
+    global RECENT_DIRECTORY_SOURCE, CAM_IS_RUNNING, CAM_AFTER_ID
+    
+    # Pause camera
+    CAM_IS_RUNNING = False
+    if CAM_AFTER_ID:
+        try: ROOT.after_cancel(CAM_AFTER_ID)
+        except: pass
+        CAM_AFTER_ID = None
+    
+    if PREVIEW: PREVIEW.withdraw()
+    
+    if not path:
+        path = ctk.filedialog.askopenfilename(title='Select source image', initialdir=RECENT_DIRECTORY_SOURCE,
+                                               filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp"), ("All", "*.*")])
+    
+    path = path.strip('{}').strip() if path else None
+    
+    if path and is_image(path):
+        try:
+            roop.globals.source_path = path
+            RECENT_DIRECTORY_SOURCE = os.path.dirname(path)
+            source_label.configure(image=render_image_preview(path, (280, 180)), text="")
+            capture_btn.configure(text='📸 Capture Face', command=do_capture)
+            update_status(f"Source: {os.path.basename(path)}")
+        except Exception as e:
+            update_status(f"Error: {e}")
+    elif not path and camera_switch_var.get() and CAM_OBJECT and CAM_OBJECT.isOpened():
+        # Resume camera if dialog cancelled
+        CAM_IS_RUNNING = True
+        run_camera_feed()
+
+
+def select_target_path(path: Optional[str] = None):
+    global RECENT_DIRECTORY_TARGET
+    if PREVIEW: PREVIEW.withdraw()
+    clear_face_reference()
+    
+    if not path:
+        path = ctk.filedialog.askopenfilename(title='Select target', initialdir=RECENT_DIRECTORY_TARGET,
+                                               filetypes=[("Media", "*.jpg *.jpeg *.png *.mp4 *.avi *.mov *.mkv"), ("All", "*.*")])
+    
+    path = path.strip('{}').strip() if path else None
+    
+    if path and is_image(path):
+        roop.globals.target_path = path
+        RECENT_DIRECTORY_TARGET = os.path.dirname(path)
+        target_label.configure(image=render_image_preview(path, (280, 180)), text="")
+        update_status(f"Target: {os.path.basename(path)}")
+    elif path and is_video(path):
+        roop.globals.target_path = path
+        RECENT_DIRECTORY_TARGET = os.path.dirname(path)
+        target_label.configure(image=render_video_preview(path, (280, 180)), text="")
+        update_status(f"Target: {os.path.basename(path)}")
+
+
+def select_output_path(start: Callable[[], None]):
+    global RECENT_DIRECTORY_OUTPUT
+    
+    if not roop.globals.target_path:
+        update_status("Select target first!")
+        return
+    
+    if not roop.globals.source_path:
+        update_status("Select or capture source face first!")
+        return
+    
+    ext = '.png' if is_image(roop.globals.target_path) else '.mp4' if is_video(roop.globals.target_path) else None
+    if not ext: return
+    
+    path = ctk.filedialog.asksaveasfilename(title='Save output', defaultextension=ext,
+                                             initialfile=f'output{ext}', initialdir=RECENT_DIRECTORY_OUTPUT)
+    if path:
+        roop.globals.output_path = path
+        RECENT_DIRECTORY_OUTPUT = os.path.dirname(path)
+        start()
+        try:
+            if os.path.exists(path):
+                prev = render_image_preview(path, (350, 200)) if is_image(path) else render_video_preview(path, (350, 200))
+                ROOT._output_label.configure(image=prev, text="")
+                generate_qr_for_output(path)
+        except: pass
+
+
+def generate_qr_for_output(path: str):
+    try:
+        qr_code_label.configure(image=generate_qr_code(f"https://share.roop/{os.path.basename(path)}", (180, 180)), text="")
+    except:
+        qr_code_label.configure(text="QR Failed")
+
+
+def render_image_preview(path: str, size: Tuple[int, int]) -> ctk.CTkImage:
+    img = ImageOps.fit(Image.open(path), size, Image.LANCZOS)
+    return ctk.CTkImage(img, size=size)
+
+
+def render_video_preview(path: str, size: Tuple[int, int], frame_num: int = 0) -> Optional[ctk.CTkImage]:
+    cap = cv2.VideoCapture(path)
+    if frame_num: cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+    ret, frame = cap.read()
+    cap.release()
+    if ret:
+        img = ImageOps.fit(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)), size, Image.LANCZOS)
+        return ctk.CTkImage(img, size=size)
+    return None
+
+
+# ==================== PREVIEW FUNCTIONS ====================
+
+def toggle_preview():
     if PREVIEW.state() == 'normal':
         PREVIEW.unbind('<Right>')
         PREVIEW.unbind('<Left>')
@@ -782,54 +637,41 @@ def toggle_preview() -> None:
         PREVIEW.deiconify()
 
 
-def init_preview() -> None:
-    PREVIEW.title('Preview [ ↕ Reference face ]')
+def init_preview():
+    PREVIEW.title('Preview')
     if is_image(roop.globals.target_path):
         preview_slider.pack_forget()
     if is_video(roop.globals.target_path):
-        video_frame_total = get_video_frame_total(roop.globals.target_path)
-        if video_frame_total > 0:
-            PREVIEW.title('Preview [ ↕ Reference face ] [ ↔ Frame number ]')
-            PREVIEW.bind('<Right>', lambda event: update_frame(int(video_frame_total / 20)))
-            PREVIEW.bind('<Left>', lambda event: update_frame(int(video_frame_total / -20)))
-        preview_slider.configure(to=video_frame_total)
+        total = get_video_frame_total(roop.globals.target_path)
+        if total > 0:
+            PREVIEW.bind('<Right>', lambda e: update_frame(int(total / 20)))
+            PREVIEW.bind('<Left>', lambda e: update_frame(int(total / -20)))
+        preview_slider.configure(to=total)
         preview_slider.pack(fill='x')
         preview_slider.set(roop.globals.reference_frame_number)
 
 
-def update_preview(frame_number: int = 0) -> None:
+def update_preview(frame_num: int = 0):
     if roop.globals.source_path and roop.globals.target_path:
-        temp_frame = get_video_frame(roop.globals.target_path, frame_number)
-        if predict_frame(temp_frame):
-            sys.exit()
-        source_face = get_one_face(cv2.imread(roop.globals.source_path))
+        temp = get_video_frame(roop.globals.target_path, frame_num)
+        if predict_frame(temp): sys.exit()
+        src_face = get_one_face(cv2.imread(roop.globals.source_path))
         if not get_face_reference():
-            reference_frame = get_video_frame(roop.globals.target_path, roop.globals.reference_frame_number)
-            reference_face = get_one_face(reference_frame, roop.globals.reference_face_position)
-            set_face_reference(reference_face)
-        else:
-            reference_face = get_face_reference()
-        for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-            temp_frame = frame_processor.process_frame(
-                source_face,
-                reference_face,
-                temp_frame
-            )
-        image = Image.fromarray(cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB))
-        image = ImageOps.contain(image, (PREVIEW_MAX_WIDTH, PREVIEW_MAX_HEIGHT), Image.LANCZOS)
-        image = ctk.CTkImage(image, size=image.size)
-        preview_label.configure(image=image)
+            ref = get_video_frame(roop.globals.target_path, roop.globals.reference_frame_number)
+            set_face_reference(get_one_face(ref, roop.globals.reference_face_position))
+        for proc in get_frame_processors_modules(roop.globals.frame_processors):
+            temp = proc.process_frame(src_face, get_face_reference(), temp)
+        img = ImageOps.contain(Image.fromarray(cv2.cvtColor(temp, cv2.COLOR_BGR2RGB)), (1200, 700), Image.LANCZOS)
+        preview_label.configure(image=ctk.CTkImage(img, size=img.size))
 
 
-def update_face_reference(steps: int) -> None:
+def update_face_reference(steps: int):
     clear_face_reference()
-    reference_frame_number = int(preview_slider.get())
     roop.globals.reference_face_position += steps
-    roop.globals.reference_frame_number = reference_frame_number
-    update_preview(reference_frame_number)
+    roop.globals.reference_frame_number = int(preview_slider.get())
+    update_preview(roop.globals.reference_frame_number)
 
 
-def update_frame(steps: int) -> None:
-    frame_number = preview_slider.get() + steps
-    preview_slider.set(frame_number)
+def update_frame(steps: int):
+    preview_slider.set(preview_slider.get() + steps)
     update_preview(preview_slider.get())
