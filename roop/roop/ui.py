@@ -1,9 +1,5 @@
 """
-<<<<<<< Updated upstream
-File: roop/ui.py - Replace entire file
-=======
-File: roop/ui.py - Complete File with Custom Target Browser and Deletion
->>>>>>> Stashed changes
+File: roop/ui.py - Complete File with Category-based Target Browser
 """
 from typing import Any, Callable, Tuple, Optional
 import cv2
@@ -11,10 +7,7 @@ import customtkinter as ctk
 import os, sys, tempfile, time
 from PIL import Image, ImageOps
 from tkinterdnd2 import TkinterDnD, DND_ALL
-<<<<<<< Updated upstream
-=======
 from tkinter import messagebox # Needed for confirmation dialog
->>>>>>> Stashed changes
 
 import roop.globals
 import roop.metadata
@@ -23,27 +16,13 @@ from roop.face_analyser import get_one_face
 from roop.face_reference import get_face_reference, set_face_reference, clear_face_reference
 from roop.predictor import predict_frame, clear_predictor
 from roop.processors.frame.core import get_frame_processors_modules
-<<<<<<< Updated upstream
 from roop.utilities import is_image, is_video, resolve_relative_path
-=======
-from roop.utilities import is_image, is_video, resolve_relative_path # resolve_relative_path is kept but not used for TARGETS_DIR now
->>>>>>> Stashed changes
 from roop.qr_generator import generate_qr_code
 
 # Globals
 ROOT = None
 PREVIEW = None
 CANVAS = None
-<<<<<<< Updated upstream
-RECENT_DIRECTORY_SOURCE = RECENT_DIRECTORY_TARGET = RECENT_DIRECTORY_OUTPUT = None
-
-# Camera - using simple approach
-CAM_OBJECT = None
-CAM_IS_RUNNING = False
-CAM_AFTER_ID = None
-CAM_FRAME_DATA = None
-
-=======
 RECENT_DIRECTORY_SOURCE = None 
 RECENT_DIRECTORY_OUTPUT = None
 
@@ -53,22 +32,23 @@ CAM_IS_RUNNING = False
 CAM_AFTER_ID = None
 CAM_FRAME_DATA = None
 
->>>>>>> Stashed changes
 # UI Elements
 preview_label = preview_slider = source_label = target_label = None
 status_label = capture_btn = camera_switch = qr_code_label = None
 camera_switch_var = None
-<<<<<<< Updated upstream
-=======
 
-# ==================== CRITICAL FIX APPLIED HERE ====================
+# ==================== TARGET PATH DEFINITION & CATEGORIES ====================
 # The 'targets' folder is in the root directory (one level up from the 'roop' folder).
-# This uses standard Python functions to guarantee the path resolution:
-# os.path.dirname(__file__) gets the directory of the current script (roop/).
-# os.path.join(..., '..', 'targets') goes up one level and then into 'targets'.
-TARGETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'targets'))
-# ===================================================================
->>>>>>> Stashed changes
+TARGETS_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'targets'))
+
+# Define categories and their corresponding subfolders
+CATEGORIES = {
+    "Male 👨": os.path.join(TARGETS_ROOT_DIR, 'Male'),
+    "Female 👩": os.path.join(TARGETS_ROOT_DIR, 'Female'),
+    "Children 👶": os.path.join(TARGETS_ROOT_DIR, 'Children')
+}
+# TARGETS_DIR is set dynamically by the browser now, but we'll use TARGETS_ROOT_DIR for the dialog start.
+# ==============================================================================
 
 
 class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
@@ -77,63 +57,112 @@ class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
         self.TkdndVersion = TkinterDnD._require(self)
 
 
-<<<<<<< Updated upstream
-=======
-# --- New Class for Custom Target Browser with Delete Option ---
+# --- New Class for Custom Target Browser with Category Selection ---
 
 class TargetBrowserDialog(ctk.CTkToplevel):
-    def __init__(self, master, targets_dir, callback):
+    def __init__(self, master, categories: dict, callback):
         super().__init__(master)
-        self.targets_dir = targets_dir
+        self.categories = categories
         self.callback = callback
+        self.current_category_path = None
         self.title("🎯 Select & Manage Target Media")
-        self.geometry("1000x700") # Increased size for better view
+        self.geometry("1000x700") 
         self.resizable(True, True)
-        self.transient(master) # Keep above main window
-        self.grab_set()        # Modal behavior
+        self.transient(master) 
+        self.grab_set()        
         
         # Style and setup
         self.configure(fg_color="#0B111D")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         
-        ctk.CTkLabel(self, text="Select or Delete Target Media (Images & Videos)", font=("Segoe UI", 24, "bold"), text_color="#C6438D").pack(pady=15)
-
+        # Header
+        self.header_frame = ctk.CTkFrame(self, fg_color="#0B111D")
+        self.header_frame.pack(fill="x", pady=15, padx=30)
+        self.title_label = ctk.CTkLabel(self.header_frame, text="Select Target Category", font=("Segoe UI", 24, "bold"), text_color="#C6438D")
+        self.title_label.pack(side="left")
+        
+        # Back Button (initially hidden)
+        self.back_button = ctk.CTkButton(self.header_frame, text="◀ Back to Categories", command=self.show_categories,
+                                        fg_color="#3a3a3a", hover_color="#5a5a5a", font=("Segoe UI", 14, "bold"))
+        
         # Frame for the grid (Scrollable)
         self.scrollable_frame = ctk.CTkScrollableFrame(self, fg_color="#131826", corner_radius=15, 
-                                                       label_text=f"Files in: {os.path.basename(targets_dir)} and subdirectories", 
                                                        label_text_color="#C6438D", label_font=("Segoe UI", 14, "bold"))
         self.scrollable_frame.pack(fill="both", expand=True, padx=30, pady=10)
         
-        self.display_files()
+        self.show_categories()
 
         # Handle close
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def display_files(self):
+    def show_categories(self):
+        self.current_category_path = None
         # Clear existing widgets
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
+            
+        self.title_label.configure(text="Select Target Category")
+        self.scrollable_frame.configure(label_text=f"Root Directory: {os.path.basename(TARGETS_ROOT_DIR)}")
+        self.back_button.pack_forget()
+
+        # Configure grid for category buttons
+        NUM_COLUMNS = 3
+        for i in range(NUM_COLUMNS):
+            self.scrollable_frame.columnconfigure(i, weight=1)
         
-        # Get all media files (including subdirectories for better browsing)
+        row = 0
+        for index, (category_name, category_path) in enumerate(self.categories.items()):
+            col = index % NUM_COLUMNS
+            
+            category_frame = ctk.CTkFrame(self.scrollable_frame, fg_color="#131826", corner_radius=15, height=200, cursor="hand2",
+                                          border_width=3, border_color="#C6438D")
+            category_frame.grid(row=row, column=col, padx=20, pady=20, sticky="nsew")
+            
+            category_frame.grid_propagate(False)
+            
+            # Button to select category
+            btn = ctk.CTkButton(category_frame, text=category_name, 
+                                command=lambda path=category_path, name=category_name: self.display_files(path, name),
+                                fg_color="#C6438D", hover_color="#A52A6D", text_color="black",
+                                font=("Segoe UI", 20, "bold"), width=200, height=150)
+            btn.place(relx=0.5, rely=0.5, anchor="center")
+            
+            if col == NUM_COLUMNS - 1:
+                row += 1
+
+        if not self.categories:
+             ctk.CTkLabel(self.scrollable_frame, text="No categories defined.", text_color="red").pack(pady=50)
+
+
+    def display_files(self, targets_dir, category_name):
+        # Clear existing widgets
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+            
+        self.current_category_path = targets_dir
+        self.title_label.configure(text=f"Select Target: {category_name}")
+        self.scrollable_frame.configure(label_text=f"Files in: {os.path.basename(targets_dir)}")
+        self.back_button.pack(side="right")
+        
         media_files = []
-        # Use os.walk to include subdirectories, as requested
         try:
-            for root, _, files in os.walk(self.targets_dir):
+            # os.walk is necessary to include subdirectories within the category (e.g., Male/Subfolder)
+            for root, _, files in os.walk(targets_dir):
                 for file in files:
                     full_path = os.path.join(root, file)
                     if is_image(full_path) or is_video(full_path):
                         media_files.append(full_path)
         except Exception as e:
-            ctk.CTkLabel(self.scrollable_frame, text=f"Error accessing directory: {self.targets_dir}\n{e}", text_color="red").pack(pady=50)
+            ctk.CTkLabel(self.scrollable_frame, text=f"Error accessing directory: {targets_dir}\n{e}", text_color="red").pack(pady=50)
             return
 
         if not media_files:
-            ctk.CTkLabel(self.scrollable_frame, text="No media files found in the 'targets' directory.", text_color="gray").pack(pady=50)
+            ctk.CTkLabel(self.scrollable_frame, text=f"No media files found in the '{category_name}' directory.", text_color="gray").pack(pady=50)
             return
 
-        # Configure grid for large icons
-        NUM_COLUMNS = 5 # Changed to 5 for better fit in 1000px width
+        # Configure grid for file icons
+        NUM_COLUMNS = 5 
         for i in range(NUM_COLUMNS):
             self.scrollable_frame.columnconfigure(i, weight=1)
         
@@ -159,8 +188,8 @@ class TargetBrowserDialog(ctk.CTkToplevel):
             img_label.image = preview_image # Keep reference
             img_label.pack(padx=10, pady=(10, 5))
             
-            # Filename Label
-            filename = os.path.relpath(path, self.targets_dir)
+            # Filename Label (show path relative to the category folder)
+            filename = os.path.relpath(path, targets_dir)
             display_name = filename if len(filename) < 25 else filename[:22] + '...'
             
             ctk.CTkLabel(item_frame, text=display_name, font=("Segoe UI", 11), text_color="gray80").pack(padx=10, pady=(0, 5))
@@ -169,12 +198,12 @@ class TargetBrowserDialog(ctk.CTkToplevel):
             control_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
             control_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-            # Select Button (uses the same action as clicking the image)
+            # Select Button
             select_btn = ctk.CTkButton(control_frame, text="Select", command=lambda p=path: self.on_select(p),
                                       fg_color="#C6438D", hover_color="#A52A6D", font=("Segoe UI", 11, "bold"), width=80)
             select_btn.pack(side="left", expand=True, fill="x", padx=(0, 5))
 
-            # Delete Button (New Feature)
+            # Delete Button 
             delete_btn = ctk.CTkButton(control_frame, text="🗑️", command=lambda p=path: self.on_delete(p),
                                        fg_color="#CC0000", hover_color="#990000", width=30)
             delete_btn.pack(side="right")
@@ -228,8 +257,12 @@ class TargetBrowserDialog(ctk.CTkToplevel):
                     target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬\n\nImage or Video")
                     update_status(f"Target removed and deleted.")
 
-                # Refresh the view immediately
-                self.display_files()
+                # Refresh the view immediately, checking which view we are on
+                if self.current_category_path:
+                    category_name = [k for k, v in self.categories.items() if v == self.current_category_path][0]
+                    self.display_files(self.current_category_path, category_name)
+                else:
+                    self.show_categories()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to delete file:\n{e}")
 
@@ -240,18 +273,13 @@ class TargetBrowserDialog(ctk.CTkToplevel):
 # --- End of TargetBrowserDialog Class ---
 
 
->>>>>>> Stashed changes
 def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     global ROOT, PREVIEW
     ROOT = create_root(start, destroy)
     PREVIEW = create_preview(ROOT)
     ROOT.withdraw()
     ROOT.after(50, lambda: (ROOT.deiconify(), ROOT.lift(), ROOT.focus_force(),
-<<<<<<< Updated upstream
-                            ROOT.attributes('-topmost', True)))
-=======
                              ROOT.attributes('-topmost', True)))
->>>>>>> Stashed changes
     ROOT.after(300, lambda: ROOT.attributes('-topmost', False))
     update_status("Ready. Toggle camera ON or drag & drop image.")
     return ROOT
@@ -330,13 +358,8 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     
     # Source display
     source_label = ctk.CTkLabel(src_card, text="Drag & Drop Image\nor Click to Select\n\n📸\n\nOr toggle camera ON",
-<<<<<<< Updated upstream
-                                fg_color="#0B111D", corner_radius=15, cursor="hand2",
-                                font=("Segoe UI", 12), text_color="gray60", height=200)
-=======
                                  fg_color="#0B111D", corner_radius=15, cursor="hand2",
                                  font=("Segoe UI", 12), text_color="gray60", height=200)
->>>>>>> Stashed changes
     source_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     source_label.drop_target_register(DND_ALL)
     source_label.dnd_bind('<<Drop>>', lambda e: select_source_path(e.data))
@@ -344,15 +367,9 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Capture button
     capture_btn = ctk.CTkButton(src_card, text='📸 Capture Face', command=do_capture,
-<<<<<<< Updated upstream
-                                fg_color="#00A8A8", hover_color="#008585", text_color="black",
-                                height=45, corner_radius=12, font=("Segoe UI", 13, "bold"),
-                                state='disabled')
-=======
                                  fg_color="#00A8A8", hover_color="#008585", text_color="black",
                                  height=45, corner_radius=12, font=("Segoe UI", 13, "bold"),
                                  state='disabled')
->>>>>>> Stashed changes
     capture_btn.pack(padx=20, pady=(0, 20), fill="x")
 
     # ============ TARGET CARD ============
@@ -367,13 +384,8 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     
     # Target display
     target_label = ctk.CTkLabel(tgt_card, text="Drag & Drop\nor Click to Select\n\n🎬\n\nImage or Video",
-<<<<<<< Updated upstream
-                                fg_color="#0B111D", corner_radius=15, cursor="hand2",
-                                font=("Segoe UI", 12), text_color="gray60", height=200)
-=======
                                  fg_color="#0B111D", corner_radius=15, cursor="hand2",
                                  font=("Segoe UI", 12), text_color="gray60", height=200)
->>>>>>> Stashed changes
     target_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     target_label.drop_target_register(DND_ALL)
     target_label.dnd_bind('<<Drop>>', lambda e: select_target_path(e.data))
@@ -404,11 +416,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     out_grid.grid_columnconfigure(1, weight=1, uniform="out")
     
     output_label = ctk.CTkLabel(out_grid, text="Output preview\nwill appear here", fg_color="#0B111D",
-<<<<<<< Updated upstream
-                                corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
-=======
                                  corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
->>>>>>> Stashed changes
     output_label.grid(row=0, column=0, padx=10, sticky="nsew")
     root._output_label = output_label
     
@@ -500,11 +508,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     provider_frame.pack(pady=5, padx=15, fill="x")
     ctk.CTkLabel(provider_frame, text="Execution Provider:", font=("Segoe UI", 11)).pack(anchor="w")
     provider_combo = ctk.CTkComboBox(provider_frame, values=["cpu", "cuda", "coreml", "openvino"],
-<<<<<<< Updated upstream
-                                      button_color="#00A8A8", button_hover_color="#008585")
-=======
                                      button_color="#00A8A8", button_hover_color="#008585")
->>>>>>> Stashed changes
     provider_combo.set("cpu")
     provider_combo.pack(fill="x", pady=5)
 
@@ -773,36 +777,22 @@ def select_source_path(path: Optional[str] = None):
     elif not path and camera_switch_var.get() and CAM_OBJECT and CAM_OBJECT.isOpened():
         # Resume camera if dialog cancelled
         CAM_IS_RUNNING = True
-<<<<<<< Updated upstream
-        run_camera_feed()
-
-
-def select_target_path(path: Optional[str] = None):
-    global RECENT_DIRECTORY_TARGET
-=======
         start_camera_feed()
 
 
 def select_target_path(path: Optional[str] = None):
-    global TARGETS_DIR
->>>>>>> Stashed changes
+    # This function is now the entry point for the category browser
     if PREVIEW: PREVIEW.withdraw()
     clear_face_reference()
     
     if not path:
-<<<<<<< Updated upstream
-        path = ctk.filedialog.askopenfilename(title='Select target', initialdir=RECENT_DIRECTORY_TARGET,
-                                               filetypes=[("Media", "*.jpg *.jpeg *.png *.mp4 *.avi *.mov *.mkv"), ("All", "*.*")])
-    
-=======
-        # Check if targets directory exists
-        if not os.path.isdir(TARGETS_DIR):
-            # Display the absolute path it's trying to find for better debugging
-            update_status(f"Error: Target directory '{TARGETS_DIR}' not found. Check path.")
+        # Check if the root targets directory exists
+        if not os.path.isdir(TARGETS_ROOT_DIR):
+            update_status(f"Error: Root target directory '{TARGETS_ROOT_DIR}' not found. Create it.")
             return
 
-        # Launch the custom browser dialog
-        TargetBrowserDialog(ROOT, TARGETS_DIR, handle_target_selection)
+        # Launch the custom browser dialog showing categories
+        TargetBrowserDialog(ROOT, CATEGORIES, handle_target_selection)
         
     else:
         # This handles drag & drop operations directly (path is provided)
@@ -811,23 +801,14 @@ def select_target_path(path: Optional[str] = None):
 
 def handle_target_selection(path):
     # This function processes the path selected from the custom dialog or drag/drop
->>>>>>> Stashed changes
     path = path.strip('{}').strip() if path else None
     
     if path and is_image(path):
         roop.globals.target_path = path
-<<<<<<< Updated upstream
-        RECENT_DIRECTORY_TARGET = os.path.dirname(path)
-=======
->>>>>>> Stashed changes
         target_label.configure(image=render_image_preview(path, (280, 180)), text="")
         update_status(f"Target: {os.path.basename(path)}")
     elif path and is_video(path):
         roop.globals.target_path = path
-<<<<<<< Updated upstream
-        RECENT_DIRECTORY_TARGET = os.path.dirname(path)
-=======
->>>>>>> Stashed changes
         target_label.configure(image=render_video_preview(path, (280, 180)), text="")
         update_status(f"Target: {os.path.basename(path)}")
 
