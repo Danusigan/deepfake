@@ -1,5 +1,9 @@
 """
+<<<<<<< Updated upstream
 File: roop/ui.py - Replace entire file
+=======
+File: roop/ui.py - Complete File with Custom Target Browser and Deletion
+>>>>>>> Stashed changes
 """
 from typing import Any, Callable, Tuple, Optional
 import cv2
@@ -7,6 +11,10 @@ import customtkinter as ctk
 import os, sys, tempfile, time
 from PIL import Image, ImageOps
 from tkinterdnd2 import TkinterDnD, DND_ALL
+<<<<<<< Updated upstream
+=======
+from tkinter import messagebox # Needed for confirmation dialog
+>>>>>>> Stashed changes
 
 import roop.globals
 import roop.metadata
@@ -15,13 +23,18 @@ from roop.face_analyser import get_one_face
 from roop.face_reference import get_face_reference, set_face_reference, clear_face_reference
 from roop.predictor import predict_frame, clear_predictor
 from roop.processors.frame.core import get_frame_processors_modules
+<<<<<<< Updated upstream
 from roop.utilities import is_image, is_video, resolve_relative_path
+=======
+from roop.utilities import is_image, is_video, resolve_relative_path # resolve_relative_path is kept but not used for TARGETS_DIR now
+>>>>>>> Stashed changes
 from roop.qr_generator import generate_qr_code
 
 # Globals
 ROOT = None
 PREVIEW = None
 CANVAS = None
+<<<<<<< Updated upstream
 RECENT_DIRECTORY_SOURCE = RECENT_DIRECTORY_TARGET = RECENT_DIRECTORY_OUTPUT = None
 
 # Camera - using simple approach
@@ -30,10 +43,32 @@ CAM_IS_RUNNING = False
 CAM_AFTER_ID = None
 CAM_FRAME_DATA = None
 
+=======
+RECENT_DIRECTORY_SOURCE = None 
+RECENT_DIRECTORY_OUTPUT = None
+
+# Camera - using simple approach
+CAM_OBJECT = None
+CAM_IS_RUNNING = False
+CAM_AFTER_ID = None
+CAM_FRAME_DATA = None
+
+>>>>>>> Stashed changes
 # UI Elements
 preview_label = preview_slider = source_label = target_label = None
 status_label = capture_btn = camera_switch = qr_code_label = None
 camera_switch_var = None
+<<<<<<< Updated upstream
+=======
+
+# ==================== CRITICAL FIX APPLIED HERE ====================
+# The 'targets' folder is in the root directory (one level up from the 'roop' folder).
+# This uses standard Python functions to guarantee the path resolution:
+# os.path.dirname(__file__) gets the directory of the current script (roop/).
+# os.path.join(..., '..', 'targets') goes up one level and then into 'targets'.
+TARGETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'targets'))
+# ===================================================================
+>>>>>>> Stashed changes
 
 
 class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
@@ -42,13 +77,181 @@ class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
         self.TkdndVersion = TkinterDnD._require(self)
 
 
+<<<<<<< Updated upstream
+=======
+# --- New Class for Custom Target Browser with Delete Option ---
+
+class TargetBrowserDialog(ctk.CTkToplevel):
+    def __init__(self, master, targets_dir, callback):
+        super().__init__(master)
+        self.targets_dir = targets_dir
+        self.callback = callback
+        self.title("🎯 Select & Manage Target Media")
+        self.geometry("1000x700") # Increased size for better view
+        self.resizable(True, True)
+        self.transient(master) # Keep above main window
+        self.grab_set()        # Modal behavior
+        
+        # Style and setup
+        self.configure(fg_color="#0B111D")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        
+        ctk.CTkLabel(self, text="Select or Delete Target Media (Images & Videos)", font=("Segoe UI", 24, "bold"), text_color="#C6438D").pack(pady=15)
+
+        # Frame for the grid (Scrollable)
+        self.scrollable_frame = ctk.CTkScrollableFrame(self, fg_color="#131826", corner_radius=15, 
+                                                       label_text=f"Files in: {os.path.basename(targets_dir)} and subdirectories", 
+                                                       label_text_color="#C6438D", label_font=("Segoe UI", 14, "bold"))
+        self.scrollable_frame.pack(fill="both", expand=True, padx=30, pady=10)
+        
+        self.display_files()
+
+        # Handle close
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def display_files(self):
+        # Clear existing widgets
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+        
+        # Get all media files (including subdirectories for better browsing)
+        media_files = []
+        # Use os.walk to include subdirectories, as requested
+        try:
+            for root, _, files in os.walk(self.targets_dir):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    if is_image(full_path) or is_video(full_path):
+                        media_files.append(full_path)
+        except Exception as e:
+            ctk.CTkLabel(self.scrollable_frame, text=f"Error accessing directory: {self.targets_dir}\n{e}", text_color="red").pack(pady=50)
+            return
+
+        if not media_files:
+            ctk.CTkLabel(self.scrollable_frame, text="No media files found in the 'targets' directory.", text_color="gray").pack(pady=50)
+            return
+
+        # Configure grid for large icons
+        NUM_COLUMNS = 5 # Changed to 5 for better fit in 1000px width
+        for i in range(NUM_COLUMNS):
+            self.scrollable_frame.columnconfigure(i, weight=1)
+        
+        # Display files
+        for index, path in enumerate(media_files):
+            row = index // NUM_COLUMNS
+            col = index % NUM_COLUMNS
+            
+            # Create a clickable item frame
+            item_frame = ctk.CTkFrame(self.scrollable_frame, fg_color="#0B111D", corner_radius=10, border_width=2, border_color="#3a3a3a")
+            item_frame.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            
+            # Use appropriate rendering function
+            if is_image(path):
+                preview_image = self._render_preview(path, is_video=False)
+            elif is_video(path):
+                preview_image = self._render_preview(path, is_video=True)
+            else:
+                 continue
+
+            # Image Label
+            img_label = ctk.CTkLabel(item_frame, image=preview_image, text="", compound="top", cursor="hand2")
+            img_label.image = preview_image # Keep reference
+            img_label.pack(padx=10, pady=(10, 5))
+            
+            # Filename Label
+            filename = os.path.relpath(path, self.targets_dir)
+            display_name = filename if len(filename) < 25 else filename[:22] + '...'
+            
+            ctk.CTkLabel(item_frame, text=display_name, font=("Segoe UI", 11), text_color="gray80").pack(padx=10, pady=(0, 5))
+            
+            # Control Frame (Select/Delete)
+            control_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
+            control_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+            # Select Button (uses the same action as clicking the image)
+            select_btn = ctk.CTkButton(control_frame, text="Select", command=lambda p=path: self.on_select(p),
+                                      fg_color="#C6438D", hover_color="#A52A6D", font=("Segoe UI", 11, "bold"), width=80)
+            select_btn.pack(side="left", expand=True, fill="x", padx=(0, 5))
+
+            # Delete Button (New Feature)
+            delete_btn = ctk.CTkButton(control_frame, text="🗑️", command=lambda p=path: self.on_delete(p),
+                                       fg_color="#CC0000", hover_color="#990000", width=30)
+            delete_btn.pack(side="right")
+            
+            # Bind events to image/frame for selection
+            img_label.bind("<Button-1>", lambda e, p=path: self.on_select(p))
+
+
+    def _render_preview(self, path: str, is_video: bool, size: Tuple[int, int] = (160, 100)) -> ctk.CTkImage:
+        try:
+            if is_video:
+                cap = cv2.VideoCapture(path)
+                ret, frame = cap.read()
+                cap.release()
+                if ret:
+                    # Draw a black background and a play icon overlay on the video frame
+                    temp_frame = frame.copy()
+                    cv2.rectangle(temp_frame, (0, 0), (temp_frame.shape[1], temp_frame.shape[0]), (0, 0, 0), -1) 
+                    h, w, _ = temp_frame.shape
+                    p1 = (w // 2 - 20, h // 2 - 20)
+                    p2 = (w // 2 - 20, h // 2 + 20)
+                    p3 = (w // 2 + 20, h // 2)
+                    cv2.fillConvexPoly(temp_frame, (p1, p2, p3), (0, 168, 168))
+                    img = Image.fromarray(cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB))
+                else:
+                    img = Image.new('RGB', size, color = 'gray20') # Use a neutral color for missing preview
+            else:
+                img = Image.open(path)
+            
+            img_fit = ImageOps.fit(img, size, Image.LANCZOS)
+            return ctk.CTkImage(img_fit, size=size)
+        except Exception as e:
+            print(f"Error rendering preview for {path}: {e}")
+            img = Image.new('RGB', size, color = 'red')
+            return ctk.CTkImage(img, size=size)
+
+
+    def on_select(self, path):
+        # Callback to the main UI handler
+        self.callback(path)
+        self.on_close()
+
+    def on_delete(self, path):
+        # Confirmation dialog before deleting
+        if messagebox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete:\n{os.path.basename(path)}?"):
+            try:
+                os.remove(path)
+                # If the deleted file was the currently selected target, clear the target field
+                if roop.globals.target_path == path:
+                    roop.globals.target_path = None
+                    target_label.configure(image=None, text="Drag & Drop\nor Click to Select\n\n🎬\n\nImage or Video")
+                    update_status(f"Target removed and deleted.")
+
+                # Refresh the view immediately
+                self.display_files()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete file:\n{e}")
+
+    def on_close(self):
+        self.grab_release()
+        self.destroy()
+
+# --- End of TargetBrowserDialog Class ---
+
+
+>>>>>>> Stashed changes
 def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     global ROOT, PREVIEW
     ROOT = create_root(start, destroy)
     PREVIEW = create_preview(ROOT)
     ROOT.withdraw()
     ROOT.after(50, lambda: (ROOT.deiconify(), ROOT.lift(), ROOT.focus_force(),
+<<<<<<< Updated upstream
                             ROOT.attributes('-topmost', True)))
+=======
+                             ROOT.attributes('-topmost', True)))
+>>>>>>> Stashed changes
     ROOT.after(300, lambda: ROOT.attributes('-topmost', False))
     update_status("Ready. Toggle camera ON or drag & drop image.")
     return ROOT
@@ -127,8 +330,13 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     
     # Source display
     source_label = ctk.CTkLabel(src_card, text="Drag & Drop Image\nor Click to Select\n\n📸\n\nOr toggle camera ON",
+<<<<<<< Updated upstream
                                 fg_color="#0B111D", corner_radius=15, cursor="hand2",
                                 font=("Segoe UI", 12), text_color="gray60", height=200)
+=======
+                                 fg_color="#0B111D", corner_radius=15, cursor="hand2",
+                                 font=("Segoe UI", 12), text_color="gray60", height=200)
+>>>>>>> Stashed changes
     source_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     source_label.drop_target_register(DND_ALL)
     source_label.dnd_bind('<<Drop>>', lambda e: select_source_path(e.data))
@@ -136,9 +344,15 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Capture button
     capture_btn = ctk.CTkButton(src_card, text='📸 Capture Face', command=do_capture,
+<<<<<<< Updated upstream
                                 fg_color="#00A8A8", hover_color="#008585", text_color="black",
                                 height=45, corner_radius=12, font=("Segoe UI", 13, "bold"),
                                 state='disabled')
+=======
+                                 fg_color="#00A8A8", hover_color="#008585", text_color="black",
+                                 height=45, corner_radius=12, font=("Segoe UI", 13, "bold"),
+                                 state='disabled')
+>>>>>>> Stashed changes
     capture_btn.pack(padx=20, pady=(0, 20), fill="x")
 
     # ============ TARGET CARD ============
@@ -153,8 +367,13 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     
     # Target display
     target_label = ctk.CTkLabel(tgt_card, text="Drag & Drop\nor Click to Select\n\n🎬\n\nImage or Video",
+<<<<<<< Updated upstream
                                 fg_color="#0B111D", corner_radius=15, cursor="hand2",
                                 font=("Segoe UI", 12), text_color="gray60", height=200)
+=======
+                                 fg_color="#0B111D", corner_radius=15, cursor="hand2",
+                                 font=("Segoe UI", 12), text_color="gray60", height=200)
+>>>>>>> Stashed changes
     target_label.pack(padx=20, pady=(0, 15), fill="both", expand=True)
     target_label.drop_target_register(DND_ALL)
     target_label.dnd_bind('<<Drop>>', lambda e: select_target_path(e.data))
@@ -185,7 +404,11 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     out_grid.grid_columnconfigure(1, weight=1, uniform="out")
     
     output_label = ctk.CTkLabel(out_grid, text="Output preview\nwill appear here", fg_color="#0B111D",
+<<<<<<< Updated upstream
                                 corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
+=======
+                                 corner_radius=12, height=220, font=("Segoe UI", 12), text_color="gray60")
+>>>>>>> Stashed changes
     output_label.grid(row=0, column=0, padx=10, sticky="nsew")
     root._output_label = output_label
     
@@ -277,7 +500,11 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     provider_frame.pack(pady=5, padx=15, fill="x")
     ctk.CTkLabel(provider_frame, text="Execution Provider:", font=("Segoe UI", 11)).pack(anchor="w")
     provider_combo = ctk.CTkComboBox(provider_frame, values=["cpu", "cuda", "coreml", "openvino"],
+<<<<<<< Updated upstream
                                       button_color="#00A8A8", button_hover_color="#008585")
+=======
+                                     button_color="#00A8A8", button_hover_color="#008585")
+>>>>>>> Stashed changes
     provider_combo.set("cpu")
     provider_combo.pack(fill="x", pady=5)
 
@@ -546,28 +773,61 @@ def select_source_path(path: Optional[str] = None):
     elif not path and camera_switch_var.get() and CAM_OBJECT and CAM_OBJECT.isOpened():
         # Resume camera if dialog cancelled
         CAM_IS_RUNNING = True
+<<<<<<< Updated upstream
         run_camera_feed()
 
 
 def select_target_path(path: Optional[str] = None):
     global RECENT_DIRECTORY_TARGET
+=======
+        start_camera_feed()
+
+
+def select_target_path(path: Optional[str] = None):
+    global TARGETS_DIR
+>>>>>>> Stashed changes
     if PREVIEW: PREVIEW.withdraw()
     clear_face_reference()
     
     if not path:
+<<<<<<< Updated upstream
         path = ctk.filedialog.askopenfilename(title='Select target', initialdir=RECENT_DIRECTORY_TARGET,
                                                filetypes=[("Media", "*.jpg *.jpeg *.png *.mp4 *.avi *.mov *.mkv"), ("All", "*.*")])
     
+=======
+        # Check if targets directory exists
+        if not os.path.isdir(TARGETS_DIR):
+            # Display the absolute path it's trying to find for better debugging
+            update_status(f"Error: Target directory '{TARGETS_DIR}' not found. Check path.")
+            return
+
+        # Launch the custom browser dialog
+        TargetBrowserDialog(ROOT, TARGETS_DIR, handle_target_selection)
+        
+    else:
+        # This handles drag & drop operations directly (path is provided)
+        handle_target_selection(path)
+
+
+def handle_target_selection(path):
+    # This function processes the path selected from the custom dialog or drag/drop
+>>>>>>> Stashed changes
     path = path.strip('{}').strip() if path else None
     
     if path and is_image(path):
         roop.globals.target_path = path
+<<<<<<< Updated upstream
         RECENT_DIRECTORY_TARGET = os.path.dirname(path)
+=======
+>>>>>>> Stashed changes
         target_label.configure(image=render_image_preview(path, (280, 180)), text="")
         update_status(f"Target: {os.path.basename(path)}")
     elif path and is_video(path):
         roop.globals.target_path = path
+<<<<<<< Updated upstream
         RECENT_DIRECTORY_TARGET = os.path.dirname(path)
+=======
+>>>>>>> Stashed changes
         target_label.configure(image=render_video_preview(path, (280, 180)), text="")
         update_status(f"Target: {os.path.basename(path)}")
 
