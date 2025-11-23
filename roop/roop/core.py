@@ -2,10 +2,8 @@
 
 import os
 import sys
-# single thread doubles cuda performance - needs to be set before torch import
 if any(arg.startswith('--execution-provider') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '1'
-# reduce tensorflow log level
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import warnings
 from typing import List
@@ -13,6 +11,7 @@ import platform
 import signal
 import shutil
 import argparse
+import time
 import onnxruntime
 import tensorflow
 import roop.globals
@@ -92,20 +91,18 @@ def suggest_execution_threads() -> int:
 
 
 def limit_resources() -> None:
-    # prevent tensorflow memory leak
     gpus = tensorflow.config.experimental.list_physical_devices('GPU')
     for gpu in gpus:
         tensorflow.config.experimental.set_virtual_device_configuration(gpu, [
             tensorflow.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)
         ])
-    # limit memory usage
     if roop.globals.max_memory:
         memory = roop.globals.max_memory * 1024 ** 3
         if platform.system().lower() == 'darwin':
             memory = roop.globals.max_memory * 1024 ** 6
         if platform.system().lower() == 'windows':
             import ctypes
-            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            kernel32 = ctypes.windll.kernel32
             kernel32.SetProcessWorkingSetSize(-1, ctypes.c_size_t(memory), ctypes.c_size_t(memory))
         else:
             import resource
@@ -129,38 +126,57 @@ def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
 
 
 def start() -> None:
-    # Check if a source image has been selected (either file or captured frame)
     if not roop.globals.source_path:
         update_status('Error: Please select or capture a source image/face.')
+        return
+
+    if not roop.globals.target_path:
+        update_status('Error: Please select target media.')
+        return
+
+    if roop.globals.PIPELINE_ENABLED:
+        timestamp = int(time.time())
+        
+        if has_image_extension(roop.globals.target_path):
+            ext = '.png'
+        elif is_video(roop.globals.target_path):
+            ext = '.mp4'
+        else:
+            update_status('Error: Invalid target file type.')
+            return
+        
+        output_filename = f"output_{timestamp}{ext}"
+        roop.globals.output_path = os.path.join(roop.globals.FIXED_OUTPUT_DIR, output_filename)
+        
+        update_status(f'Pipeline: Saving to {output_filename}')
+    
+    if not roop.globals.output_path:
+        update_status('Error: Output path not set.')
         return
 
     for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
         if not frame_processor.pre_start():
             return
-    # process image to image
+    
     if has_image_extension(roop.globals.target_path):
         if predict_image(roop.globals.target_path):
             destroy()
         shutil.copy2(roop.globals.target_path, roop.globals.output_path)
-        # process frame
         for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
             update_status('Progressing...', frame_processor.NAME)
             frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
             frame_processor.post_process()
-        # validate image
-        if is_image(roop.globals.target_path):
+        if is_image(roop.globals.output_path):
             update_status('Processing to image succeed! Generating QR Code.')
-            # After successful processing, generate QR code in the UI
             ui.generate_qr_for_output(roop.globals.output_path)
         else:
             update_status('Processing to image failed!')
         return
-    # process image to videos
+    
     if predict_video(roop.globals.target_path):
         destroy()
     update_status('Creating temporary resources...')
     create_temp(roop.globals.target_path)
-    # extract frames
     if roop.globals.keep_fps:
         fps = detect_fps(roop.globals.target_path)
         update_status(f'Extracting frames with {fps} FPS...')
@@ -168,7 +184,6 @@ def start() -> None:
     else:
         update_status('Extracting frames with 30 FPS...')
         extract_frames(roop.globals.target_path)
-    # process frame
     temp_frame_paths = get_temp_frame_paths(roop.globals.target_path)
     if temp_frame_paths:
         for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
@@ -178,7 +193,6 @@ def start() -> None:
     else:
         update_status('Frames not found...')
         return
-    # create video
     if roop.globals.keep_fps:
         fps = detect_fps(roop.globals.target_path)
         update_status(f'Creating video with {fps} FPS...')
@@ -186,7 +200,6 @@ def start() -> None:
     else:
         update_status('Creating video with 30 FPS...')
         create_video(roop.globals.target_path)
-    # handle audio
     if roop.globals.skip_audio:
         move_temp(roop.globals.target_path, roop.globals.output_path)
         update_status('Skipping audio...')
@@ -196,22 +209,18 @@ def start() -> None:
         else:
             update_status('Restoring audio might cause issues as fps are not kept...')
         restore_audio(roop.globals.target_path, roop.globals.output_path)
-    # clean temp
     update_status('Cleaning temporary resources...')
     clean_temp(roop.globals.target_path)
-    # validate video
-    if is_video(roop.globals.target_path):
+    if is_video(roop.globals.output_path):
         update_status('Processing to video succeed! Generating QR Code.')
-        # After successful processing, generate QR code in the UI
         ui.generate_qr_for_output(roop.globals.output_path)
     else:
         update_status('Processing to video failed!')
 
 
 def destroy() -> None:
-    # Cleanup camera resource on exit
-    if hasattr(ui, 'CAPTURER') and ui.CAPTURER and ui.CAPTURER.isOpened():
-        ui.CAPTURER.release()
+    if hasattr(ui, 'destroy_camera'):
+        ui.destroy_camera()
     if roop.globals.target_path:
         clean_temp(roop.globals.target_path)
     sys.exit()

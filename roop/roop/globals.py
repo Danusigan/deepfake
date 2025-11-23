@@ -1,19 +1,36 @@
-# ... (rest of the file remains unchanged) ...
+import os
 
-# --- NEW FIREBASE CONFIGURATION (Placeholder) ---
-# NOTE: Replace these placeholder values with your actual Firebase project configuration.
-FIREBASE_CONFIG = {
-    "type": "service_account",
-    "project_id": "YOUR_FIREBASE_PROJECT_ID",   # <-- UPDATE THIS
-    "private_key_id": "YOUR_PRIVATE_KEY_ID",    # <-- UPDATE THIS
-    # IMPORTANT: Paste the entire private key block exactly as it appears in the JSON file
-    "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n", 
-    "client_email": "firebase-adminsdk-xxxxx@YOUR_PROJECT_ID.iam.gserviceaccount.com", # <-- UPDATE THIS
-    "client_id": "YOUR_CLIENT_ID", # <-- UPDATE THIS
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-xxxxx-1%40YOUR_PROJECT_ID.iam.gserviceaccount.com", # <-- UPDATE THIS
-    "storage_bucket": "YOUR_PROJECT_ID.appspot.com" # <-- UPDATE THIS
-}
-# ------------------------------------------------
+source_path = None
+target_path = None
+output_path = None
+
+headless = None
+frame_processors = []
+keep_fps = False
+keep_frames = False
+skip_audio = False
+many_faces = False
+reference_face_position = 0
+reference_frame_number = 0
+similar_face_distance = 0.85
+
+temp_frame_format = 'png'
+temp_frame_quality = 0
+output_video_encoder = 'libx264'
+output_video_quality = 35
+
+max_memory = None
+execution_providers = ['cpu']
+execution_threads = 1
+log_level = 'error'
+
+FIXED_OUTPUT_DIR = r'C:\Users\sanji\Desktop\Project of Mine all UG\Rextro\deepfake\roop\targets\Outputs'
+PIPELINE_ENABLED = False
+PIPELINE_AUTO_TARGET = None
+
+if not os.path.exists(FIXED_OUTPUT_DIR):
+    try:
+        os.makedirs(FIXED_OUTPUT_DIR, exist_ok=True)
+        print(f"[PIPELINE] Created output directory: {FIXED_OUTPUT_DIR}")
+    except Exception as e:
+        print(f"[PIPELINE] Error creating output directory: {e}")
