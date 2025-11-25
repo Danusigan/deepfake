@@ -16,7 +16,13 @@ import onnxruntime
 import tensorflow
 import roop.globals
 import roop.metadata
-import roop.ui as ui
+# Fix UI import
+try:
+    import roop.ui as ui
+except ImportError as e:
+    print(f"UI import error: {e}")
+    # Fallback for headless mode
+    ui = None
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
@@ -121,7 +127,7 @@ def pre_check() -> bool:
 
 def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
     print(f'[{scope}] {message}')
-    if not roop.globals.headless:
+    if not roop.globals.headless and ui:
         ui.update_status(message)
 
 
@@ -168,7 +174,8 @@ def start() -> None:
             frame_processor.post_process()
         if is_image(roop.globals.output_path):
             update_status('Processing to image succeed! Generating QR Code.')
-            ui.generate_qr_for_output(roop.globals.output_path)
+            if ui:
+                ui.generate_qr_for_output(roop.globals.output_path)
         else:
             update_status('Processing to image failed!')
         return
@@ -213,13 +220,14 @@ def start() -> None:
     clean_temp(roop.globals.target_path)
     if is_video(roop.globals.output_path):
         update_status('Processing to video succeed! Generating QR Code.')
-        ui.generate_qr_for_output(roop.globals.output_path)
+        if ui:
+            ui.generate_qr_for_output(roop.globals.output_path)
     else:
         update_status('Processing to video failed!')
 
 
 def destroy() -> None:
-    if hasattr(ui, 'destroy_camera'):
+    if ui and hasattr(ui, 'destroy_camera'):
         ui.destroy_camera()
     if roop.globals.target_path:
         clean_temp(roop.globals.target_path)
@@ -237,5 +245,8 @@ def run() -> None:
     if roop.globals.headless:
         start()
     else:
-        window = ui.init(start, destroy)
-        window.mainloop()
+        if ui:
+            window = ui.init(start, destroy)
+            window.mainloop()
+        else:
+            print("UI not available. Running in headless mode requires source, target, and output paths.")
