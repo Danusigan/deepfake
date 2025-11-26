@@ -1,5 +1,5 @@
 """
-Camera handling module - Complete fix for pyimage reference error
+Camera handling module - Fix for 2nd Cycle Feed Issue
 """
 
 import cv2
@@ -135,6 +135,10 @@ def handle_camera_toggle():
 def start_camera_feed():
     """Start displaying camera feed"""
     global CAM_IS_RUNNING
+    # Prevent double starting
+    if CAM_IS_RUNNING and CAM_AFTER_ID is not None:
+        return
+        
     CAM_IS_RUNNING = True
     # Initial delay before first tick
     _root.after(150, camera_feed_tick)
@@ -235,13 +239,24 @@ def do_recapture():
     update_status("🔄 Camera restarted")
 
 def enable_camera_for_pipeline():
-    """Enable camera automatically for pipeline mode"""
+    """Enable camera automatically for pipeline mode - FIXED for 2nd cycle"""
     from .file_handlers import update_status
     
+    # 1. If Switch is OFF -> Turn it ON (First Cycle)
     if not _camera_switch_var.get():
         _camera_switch_var.set(True)
         update_status("🔄 Enabling camera for pipeline...")
         _root.after(200, handle_camera_toggle)
+        
+    # 2. If Switch is ON but Feed is STOPPED (Second Cycle Fix)
+    elif not CAM_IS_RUNNING:
+        update_status("🔄 Restarting camera feed for next cycle...")
+        
+        # Reset UI state for capture
+        _capture_btn.configure(state='normal', text='📸 Capture Face', fg_color="#00bcd4")
+        
+        # Restart the visual feed loop
+        start_camera_feed()
 
 def get_camera_state():
     """Get current camera state"""

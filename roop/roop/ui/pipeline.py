@@ -201,6 +201,7 @@ def start_next_cycle():
         _capture_btn.configure(text='📸 Capture Face', state='disabled', fg_color="#00bcd4")
     
     # Open target browser for new target selection
+    # This will eventually call handle_pipeline_target_selection -> enable_camera_for_pipeline
     root = get_root()
     categories = get_categories()
     TargetBrowserDialog(root, categories, handle_pipeline_target_selection, pipeline_mode=True)
