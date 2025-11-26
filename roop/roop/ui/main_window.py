@@ -78,6 +78,9 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     ctk.set_default_color_theme("dark-blue")
     
     ROOT = CTk()
+    ROOT.state('zoomed')  # Maximizes window, recommended for Windows laptops
+    
+
     ROOT.title(f'{roop.metadata.name} {roop.metadata.version}')
     ROOT.geometry('1100x850')
     ROOT.configure(fg_color=COLOR_BG)

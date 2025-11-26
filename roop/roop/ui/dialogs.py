@@ -26,6 +26,8 @@ class TargetBrowserDialog(ctk.CTkToplevel):
         
         self.title("Select Target Category")
         self.geometry("900x600")
+        self.state('zoomed')  # Maximizes window (recommended for Windows screens)
+
         self.configure(fg_color=COLOR_BG)
         self.transient(master)
         self.grab_set()
