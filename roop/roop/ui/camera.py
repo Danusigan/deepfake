@@ -20,7 +20,7 @@ CAM_IS_RUNNING = False
 CAM_AFTER_ID = None
 CAM_FRAME_DATA = None
 CAM_CURRENT_IMAGE = None
-CAM_TYPE = "webcam" 
+CAM_TYPE = "webcam"  # "webcam" or "ip_webcam"
 IP_WEBCAM_URL = None
 
 # UI references
@@ -260,7 +260,7 @@ def show_ip_config_dialog():
                 font=("Segoe UI", 12, "bold")).pack(pady=5)
     
     ip_entry = ctk.CTkEntry(dialog, width=300, height=35,
-                           placeholder_text="192.168.1.100")
+                           placeholder_text="10.50.60.130 or http://10.50.60.130:8080")
     ip_entry.pack(pady=5)
     
     # Try to load saved IP
@@ -285,14 +285,25 @@ def show_ip_config_dialog():
             status_lbl.configure(text="❌ Please enter IP address", text_color="#ff5252")
             return
         
-        # Save IP for future use
+        # Parse IP - handle full URL or just IP
+        if ip.startswith('http://'):
+            # Full URL provided
+            IP_WEBCAM_URL = ip.rstrip('/')
+        elif ':' in ip:
+            # IP with port (e.g., 10.50.60.130:8080)
+            IP_WEBCAM_URL = f"http://{ip}"
+        else:
+            # Just IP (e.g., 10.50.60.130)
+            IP_WEBCAM_URL = f"http://{ip}:8080"
+        
+        # Save for future use (save clean IP only)
+        clean_ip = IP_WEBCAM_URL.replace('http://', '').replace(':8080', '')
         try:
             with open(config_file, 'w') as f:
-                f.write(ip)
+                f.write(clean_ip)
         except:
             pass
         
-        IP_WEBCAM_URL = f"http://{ip}:8080"
         CAM_TYPE = "ip_webcam"
         
         status_lbl.configure(text="🔄 Connecting...", text_color="#00bcd4")
