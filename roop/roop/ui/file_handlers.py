@@ -1,5 +1,5 @@
 """
-File handling module - Updated for correct paths and fixed exports
+File handling module - Fixed for Video/GIF support with animated previews
 """
 
 from typing import Optional, Callable
@@ -12,9 +12,9 @@ try:
 except ImportError:
     DND_AVAILABLE = False
 import roop.globals
-from roop.utilities import is_image, is_video
+from roop.utilities import is_image, is_video, has_image_extension
 from roop.qr_generator import generate_qr_code
-from .utils import render_image_preview, render_video_preview
+from .utils import render_image_preview, render_video_preview, create_animated_gif_preview
 
 # UI references
 _root = None
@@ -28,7 +28,7 @@ _capture_btn = None
 RECENT_DIRECTORY_SOURCE = None
 RECENT_DIRECTORY_OUTPUT = None
 
-# Categories for target browser - UPDATED PATH
+# Categories for target browser
 TARGETS_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'targets'))
 CATEGORIES = {
     "Male": os.path.join(TARGETS_ROOT_DIR, 'Male'),
@@ -58,6 +58,11 @@ def update_status(text: str):
         _root.update_idletasks()
 
 
+def is_gif(path: str) -> bool:
+    """Check if file is a GIF"""
+    return path.lower().endswith('.gif')
+
+
 def select_source_path(path: Optional[str] = None):
     """Select source image file"""
     from .camera import get_camera_state, start_camera_feed
@@ -65,9 +70,7 @@ def select_source_path(path: Optional[str] = None):
     
     global RECENT_DIRECTORY_SOURCE
     
-    # Pause camera feed
     camera_state = get_camera_state()
-    
     close_preview()
     
     if not path:
@@ -85,12 +88,11 @@ def select_source_path(path: Optional[str] = None):
             roop.globals.source_path = path
             RECENT_DIRECTORY_SOURCE = os.path.dirname(path)
             _source_label.configure(image=render_image_preview(path, (280, 180)), text="")
-            _capture_btn.configure(text='📸 Capture Face', command=lambda: __import__('ui.camera', fromlist=['do_capture']).do_capture())
+            _capture_btn.configure(text='📸 Capture Face', command=lambda: __import__('roop.ui.camera', fromlist=['do_capture']).do_capture())
             update_status(f"Source: {os.path.basename(path)}")
         except Exception as e:
             update_status(f"Error: {e}")
     elif not path and camera_state['is_open']:
-        # Resume camera
         start_camera_feed()
 
 
@@ -117,7 +119,7 @@ def select_target_path(path: Optional[str] = None):
 
 
 def handle_target_selection(path):
-    """Handle target file selection"""
+    """Handle target file selection with animated preview support"""
     if path:
         path = path.strip('{}').strip()
     
@@ -125,14 +127,42 @@ def handle_target_selection(path):
         roop.globals.target_path = path
         _target_label.configure(image=render_image_preview(path, (280, 180)), text="")
         update_status(f"Target: {os.path.basename(path)}")
+    elif path and is_gif(path):
+        roop.globals.target_path = path
+        # Show animated GIF preview
+        update_status(f"Loading GIF: {os.path.basename(path)}")
+        _root.after(100, lambda: show_animated_target_preview(path))
     elif path and is_video(path):
         roop.globals.target_path = path
+        # Show video thumbnail
         _target_label.configure(image=render_video_preview(path, (280, 180)), text="")
-        update_status(f"Target: {os.path.basename(path)}")
+        update_status(f"Target Video: {os.path.basename(path)}")
+        # Add video icon overlay
+        _root.after(100, lambda: add_video_indicator(_target_label))
+
+
+def show_animated_target_preview(gif_path):
+    """Show animated GIF in target preview"""
+    try:
+        animated_preview = create_animated_gif_preview(gif_path, (280, 180), _target_label, _root)
+        if animated_preview:
+            update_status(f"✅ GIF loaded: {os.path.basename(gif_path)}")
+        else:
+            # Fallback to static preview
+            _target_label.configure(image=render_image_preview(gif_path, (280, 180)), text="")
+            update_status(f"GIF: {os.path.basename(gif_path)} (static preview)")
+    except Exception as e:
+        update_status(f"Error loading GIF: {e}")
+
+
+def add_video_indicator(label):
+    """Add visual indicator that this is a video"""
+    # This is handled in the UI - just update status
+    update_status(f"📹 Video loaded - will process all frames")
 
 
 def select_output_path(start_callback: Callable[[], None]):
-    """Select output file path and start processing"""
+    """Select output file path and start processing - FIXED for video/GIF detection"""
     global RECENT_DIRECTORY_OUTPUT
     
     if roop.globals.PIPELINE_ENABLED:
@@ -147,15 +177,27 @@ def select_output_path(start_callback: Callable[[], None]):
         update_status("Select or capture source face first!")
         return
     
-    ext = '.png' if is_image(roop.globals.target_path) else '.mp4' if is_video(roop.globals.target_path) else None
-    if not ext:
+    # FIXED: Proper extension detection
+    target_path = roop.globals.target_path
+    
+    if is_gif(target_path):
+        ext = '.gif'  # GIF output
+        file_type = "GIF"
+    elif is_video(target_path):
+        ext = '.mp4'  # Video output
+        file_type = "Video"
+    elif has_image_extension(target_path):
+        ext = '.png'  # Image output
+        file_type = "Image"
+    else:
+        update_status("❌ Unknown file type!")
         return
     
     timestamp = int(time.time())
     output_filename = f"output_{timestamp}{ext}"
     roop.globals.output_path = os.path.join(roop.globals.FIXED_OUTPUT_DIR, output_filename)
     
-    update_status(f"Output will be saved to: {output_filename}")
+    update_status(f"⚡ Processing {file_type}... Output: {output_filename}")
     _root.update()
     
     start_callback()
@@ -163,17 +205,47 @@ def select_output_path(start_callback: Callable[[], None]):
 
 
 def check_and_display_output(path):
-    """Check if output exists and display it"""
+    """Check if output exists and display it with animation support"""
     try:
         if os.path.exists(path):
-            if is_image(path):
-                prev = render_image_preview(path, (350, 200))
-            else:
+            if is_gif(path):
+                # Show animated output GIF
+                update_status("✅ GIF processing complete! Displaying...")
+                _root.after(100, lambda: show_animated_output_preview(path))
+            elif is_video(path):
+                # Show video thumbnail
                 prev = render_video_preview(path, (350, 200))
-            _output_label.configure(image=prev, text="")
+                _output_label.configure(image=prev, text="")
+                update_status("✅ Video processing complete!")
+                add_video_player_hint()
+            elif is_image(path):
+                # Show image
+                prev = render_image_preview(path, (350, 200))
+                _output_label.configure(image=prev, text="")
+                update_status("✅ Image processing complete!")
+            
+            # Generate QR code
             generate_qr_for_output(path)
     except Exception as e:
         print(f"Error displaying output: {e}")
+        update_status(f"Output saved but preview error: {e}")
+
+
+def show_animated_output_preview(gif_path):
+    """Show animated GIF in output preview"""
+    try:
+        animated_preview = create_animated_gif_preview(gif_path, (350, 200), _output_label, _root)
+        if animated_preview:
+            update_status(f"✅ GIF complete! Playing in preview...")
+        else:
+            _output_label.configure(image=render_image_preview(gif_path, (350, 200)), text="")
+    except Exception as e:
+        update_status(f"GIF saved but preview error: {e}")
+
+
+def add_video_player_hint():
+    """Add hint for video playback"""
+    update_status("📹 Video saved! Click output to play in media player")
 
 
 def generate_qr_for_output(path: str):
@@ -183,14 +255,7 @@ def generate_qr_for_output(path: str):
             qr_img = generate_qr_code(f"https://share.roop/{os.path.basename(path)}", (180, 180))
             _qr_code_label.configure(image=qr_img, text="")
             
-            if _output_label:
-                if is_image(path):
-                    prev = render_image_preview(path, (350, 200))
-                elif is_video(path):
-                    prev = render_video_preview(path, (350, 200))
-                else:
-                    return
-                _output_label.configure(image=prev, text="")
+            # Don't re-display output, it's already shown above
     except Exception as e:
         print(f"Error generating QR code: {e}")
         if _qr_code_label:

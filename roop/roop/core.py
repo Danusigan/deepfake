@@ -12,6 +12,8 @@ import signal
 import shutil
 import argparse
 import time
+import cv2
+import numpy as np
 import onnxruntime
 import tensorflow
 import roop.globals
@@ -26,6 +28,7 @@ except ImportError as e:
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+from roop.face_analyser import get_one_face
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -131,6 +134,258 @@ def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
         ui.update_status(message)
 
 
+def is_gif(path: str) -> bool:
+    """Check if file is a GIF"""
+    return path and path.lower().endswith('.gif')
+
+
+def process_gif(source_path: str, target_gif_path: str, output_path: str) -> None:
+    """Process GIF file frame by frame and save as HIGH QUALITY GIF"""
+    from PIL import Image, ImageSequence
+    
+    update_status('Processing GIF in HIGH QUALITY mode...')
+    
+    # Open target GIF
+    target_gif = Image.open(target_gif_path)
+    
+    # Get original dimensions
+    original_size = target_gif.size
+    update_status(f'Original GIF size: {original_size[0]}x{original_size[1]}')
+    
+    # CRITICAL: Load source face ONCE before processing
+    update_status('Loading source face...')
+    source_face = get_one_face(cv2.imread(source_path))
+    
+    if source_face is None:
+        update_status('❌ ERROR: No face detected in source image!')
+        update_status('Please use a clear image with a visible face.')
+        return
+    
+    update_status('✅ Source face loaded successfully')
+    
+    processed_frames = []
+    frame_delays = []
+    faces_found = 0
+    faces_missing = 0
+    
+    try:
+        # Get total frame count
+        frame_count = 0
+        try:
+            while True:
+                target_gif.seek(frame_count)
+                frame_count += 1
+        except EOFError:
+            pass
+        
+        target_gif.seek(0)  # Reset to first frame
+        update_status(f'Processing {frame_count} frames...')
+        
+        for frame_idx, frame in enumerate(ImageSequence.Iterator(target_gif)):
+            update_status(f'Processing frame {frame_idx + 1}/{frame_count}...')
+            
+            # Convert PIL frame to RGB (preserve quality)
+            frame_rgb = frame.convert('RGB')
+            
+            # Resize to maintain quality if needed
+            if frame_rgb.size != original_size:
+                frame_rgb = frame_rgb.resize(original_size, Image.LANCZOS)
+            
+            frame_array = np.array(frame_rgb)
+            frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+            
+            # CRITICAL: Detect face in current GIF frame
+            target_face = get_one_face(frame_bgr)
+            
+            # Process frame with face swapper ONLY if face is detected
+            if target_face is not None:
+                faces_found += 1
+                for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
+                    frame_bgr = frame_processor.process_frame(
+                        source_face,   # Source face (pre-loaded)
+                        target_face,   # Target face from current frame
+                        frame_bgr      # Current frame to process
+                    )
+            else:
+                faces_missing += 1
+                if faces_missing <= 3:  # Only show first 3 warnings
+                    update_status(f'⚠️ No face detected in frame {frame_idx + 1}, keeping original')
+            
+            # Convert back to PIL Image (maintain quality)
+            frame_rgb_processed = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            pil_frame = Image.fromarray(frame_rgb_processed.astype('uint8'))
+            
+            processed_frames.append(pil_frame)
+            
+            # Get frame delay (duration)
+            try:
+                delay = frame.info.get('duration', 100)
+                # Ensure minimum delay for smooth playback
+                if delay < 20:
+                    delay = 20
+                frame_delays.append(delay)
+            except:
+                frame_delays.append(100)
+        
+        # Report face detection stats
+        update_status(f'Face detection: {faces_found} faces found, {faces_missing} frames without faces')
+        
+        if faces_found == 0:
+            update_status('❌ WARNING: No faces detected in any GIF frames!')
+            update_status('The GIF will be saved but faces were NOT swapped.')
+        
+        # Save as HIGH QUALITY animated GIF
+        update_status('Saving HIGH QUALITY GIF (this may take a moment)...')
+        
+        processed_frames[0].save(
+            output_path,
+            save_all=True,
+            append_images=processed_frames[1:],
+            duration=frame_delays,
+            loop=0,
+            optimize=True,  # Enable optimization
+            quality=95,     # High quality (0-100, higher is better)
+        )
+        
+        update_status(f'✅ HIGH QUALITY GIF complete! {len(processed_frames)} frames')
+        
+        # Show file size info
+        output_size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        update_status(f'Output size: {output_size_mb:.2f} MB')
+        
+    except Exception as e:
+        update_status(f'❌ Error processing GIF: {e}')
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def process_gif_as_video(source_path: str, target_gif_path: str, output_path: str) -> None:
+    """
+    ALTERNATIVE: Process GIF as video for BEST QUALITY
+    Converts GIF -> Video -> Process -> Video output
+    Much better quality than direct GIF processing
+    """
+    from PIL import Image, ImageSequence
+    import tempfile
+    
+    update_status('Processing GIF as VIDEO for MAXIMUM QUALITY...')
+    
+    try:
+        # Create temporary video file
+        temp_video = os.path.join(tempfile.gettempdir(), f'temp_gif_{int(time.time())}.mp4')
+        
+        # Step 1: Convert GIF to video
+        update_status('Converting GIF to video...')
+        gif = Image.open(target_gif_path)
+        
+        # Get GIF properties
+        width, height = gif.size
+        try:
+            fps = 1000 / gif.info.get('duration', 100)
+            if fps > 50:
+                fps = 50
+        except:
+            fps = 10
+        
+        # Create video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video_writer = cv2.VideoWriter(temp_video, fourcc, fps, (width, height))
+        
+        for frame in ImageSequence.Iterator(gif):
+            frame_rgb = frame.convert('RGB')
+            frame_array = np.array(frame_rgb)
+            frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+            video_writer.write(frame_bgr)
+        
+        video_writer.release()
+        update_status(f'✅ Converted to video at {fps} FPS')
+        
+        # Step 2: Process video with face swap
+        update_status('Processing video with face swap...')
+        temp_output_video = output_path.replace('.gif', '.mp4')
+        
+        # Set temp paths
+        old_target = roop.globals.target_path
+        old_output = roop.globals.output_path
+        
+        roop.globals.target_path = temp_video
+        roop.globals.output_path = temp_output_video
+        
+        # Process as video (uses existing video pipeline)
+        create_temp(temp_video)
+        extract_frames(temp_video, fps)
+        temp_frame_paths = get_temp_frame_paths(temp_video)
+        
+        if temp_frame_paths:
+            for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
+                update_status('Processing frames...', frame_processor.NAME)
+                frame_processor.process_video(source_path, temp_frame_paths)
+                frame_processor.post_process()
+        
+        create_video(temp_video, fps)
+        move_temp(temp_video, temp_output_video)
+        clean_temp(temp_video)
+        
+        # Restore paths
+        roop.globals.target_path = old_target
+        roop.globals.output_path = old_output
+        
+        update_status('✅ Video processing complete!')
+        
+        # Step 3: Convert back to GIF (if user wants GIF output)
+        if output_path.endswith('.gif'):
+            update_status('Converting back to GIF...')
+            
+            # Read processed video
+            cap = cv2.VideoCapture(temp_output_video)
+            frames = []
+            
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_frame = Image.fromarray(frame_rgb)
+                frames.append(pil_frame)
+            
+            cap.release()
+            
+            # Save as GIF with high quality
+            frame_duration = int(1000 / fps)
+            frames[0].save(
+                output_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=frame_duration,
+                loop=0,
+                optimize=True,
+                quality=95
+            )
+            
+            # Clean up temp video
+            try:
+                os.remove(temp_output_video)
+            except:
+                pass
+            
+            update_status(f'✅ HIGH QUALITY GIF saved! {len(frames)} frames')
+        else:
+            # Keep as video
+            os.rename(temp_output_video, output_path)
+            update_status('✅ Saved as high quality video!')
+        
+        # Clean up
+        try:
+            os.remove(temp_video)
+        except:
+            pass
+        
+    except Exception as e:
+        update_status(f'Error in video conversion: {e}')
+        raise
+
+
 def start() -> None:
     if not roop.globals.source_path:
         update_status('Error: Please select or capture a source image/face.')
@@ -143,7 +398,10 @@ def start() -> None:
     if roop.globals.PIPELINE_ENABLED:
         timestamp = int(time.time())
         
-        if has_image_extension(roop.globals.target_path):
+        # FIXED: Proper extension detection for GIF
+        if is_gif(roop.globals.target_path):
+            ext = '.gif'
+        elif has_image_extension(roop.globals.target_path):
             ext = '.png'
         elif is_video(roop.globals.target_path):
             ext = '.mp4'
@@ -164,6 +422,22 @@ def start() -> None:
         if not frame_processor.pre_start():
             return
     
+    # ADDED: Handle GIF processing
+    if is_gif(roop.globals.target_path):
+        try:
+            process_gif(roop.globals.source_path, roop.globals.target_path, roop.globals.output_path)
+            
+            if os.path.exists(roop.globals.output_path):
+                update_status('Processing to GIF succeed! Generating QR Code.')
+                if ui:
+                    ui.generate_qr_for_output(roop.globals.output_path)
+            else:
+                update_status('Processing to GIF failed!')
+        except Exception as e:
+            update_status(f'GIF processing error: {e}')
+        return
+    
+    # Handle image processing
     if has_image_extension(roop.globals.target_path):
         if predict_image(roop.globals.target_path):
             destroy()
@@ -180,6 +454,7 @@ def start() -> None:
             update_status('Processing to image failed!')
         return
     
+    # Handle video processing
     if predict_video(roop.globals.target_path):
         destroy()
     update_status('Creating temporary resources...')
