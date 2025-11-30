@@ -5,7 +5,7 @@ target_path = None
 output_path = None
 
 headless = None
-frame_processors = ['face_swapper', 'face_enhancer']  # CHANGED: Added face_enhancer
+frame_processors = ['face_swapper']  # OPTIMIZED: Removed face_enhancer for speed
 keep_fps = False
 keep_frames = False
 skip_audio = False
@@ -14,14 +14,14 @@ reference_face_position = 0
 reference_frame_number = 0
 similar_face_distance = 0.85
 
-temp_frame_format = 'png'
-temp_frame_quality = 0
+temp_frame_format = 'jpg'  # OPTIMIZED: JPG is faster than PNG
+temp_frame_quality = 85     # OPTIMIZED: Good quality, faster processing
 output_video_encoder = 'libx264'
-output_video_quality = 35
+output_video_quality = 45   # OPTIMIZED: Balanced quality/speed
 
 max_memory = None
-execution_providers = ['cpu']
-execution_threads = 1
+execution_providers = ['CUDAExecutionProvider', 'cpu']  # OPTIMIZED: Try GPU first
+execution_threads = 4       # OPTIMIZED: Use multiple threads
 log_level = 'error'
 
 FIXED_OUTPUT_DIR = r'C:\Users\sanji\Desktop\Project of Mine all UG\Rextro\deepfake\roop\targets\Outputs'
@@ -36,28 +36,30 @@ if not os.path.exists(FIXED_OUTPUT_DIR):
         print(f"[PIPELINE] Error creating output directory: {e}")
 
 # ============================================
-# ENHANCED QUALITY SETTINGS - NEW
+# OPTIMIZED QUALITY SETTINGS FOR SPEED
 # ============================================
 
-# Face blending settings for better quality
-FACE_MASK_BLUR = 20              # Blur amount for smooth edges (1-50)
-FACE_MASK_PADDING = 0.4          # Padding around face (0.0-1.0)
-BLEND_RATIO = 1.0                # Face blend ratio (0.8-1.0)
+# Face blending settings - OPTIMIZED
+FACE_MASK_BLUR = 10              # OPTIMIZED: Reduced blur for speed
+FACE_MASK_PADDING = 0.3          # OPTIMIZED: Less padding
+BLEND_RATIO = 0.95               # OPTIMIZED: Slightly reduced
 
-# Enhancement settings
-ENABLE_FACE_ENHANCER = True      # Use GFPGAN for face enhancement
-FACE_ENHANCER_BLEND = 0.8        # Enhancement strength (0.0-1.0)
-COLOR_CORRECTION = True          # Match skin tone to target
-SHARPEN_OUTPUT = True            # Sharpen final result
+# Enhancement settings - DISABLED FOR SPEED
+ENABLE_FACE_ENHANCER = False     # OPTIMIZED: Disabled (biggest speed gain)
+FACE_ENHANCER_BLEND = 0.5        
+COLOR_CORRECTION = False         # OPTIMIZED: Disabled for speed
+SHARPEN_OUTPUT = False           # OPTIMIZED: Disabled for speed
 
-# Face detection
-FACE_DETECTION_CONFIDENCE = 0.5  # Lower = detect more faces (0.0-1.0)
+# Face detection - OPTIMIZED
+FACE_DETECTION_CONFIDENCE = 0.6  # OPTIMIZED: Slightly higher threshold
 
-# Post-processing
-SMOOTH_EDGES = True              # Smooth face edges
-EDGE_BLUR_AMOUNT = 5            # Edge smoothing amount (1-20)
+# Post-processing - DISABLED FOR SPEED
+SMOOTH_EDGES = False             # OPTIMIZED: Disabled for speed
+EDGE_BLUR_AMOUNT = 3             
 
-# GIF Processing settings
-GIF_QUALITY = 95                # GIF output quality (0-100)
-GIF_OPTIMIZE = True             # Optimize GIF file size
-GIF_PROCESSING_MODE = 'direct'  # 'direct' or 'video'
+# GIF Processing settings - OPTIMIZED
+GIF_QUALITY = 85                 # OPTIMIZED: Reduced from 95
+GIF_OPTIMIZE = True              
+GIF_PROCESSING_MODE = 'direct'
+GIF_MAX_SIZE = 800              # OPTIMIZED: Resize large GIFs for speed
+GIF_SKIP_FRAMES = 1             # OPTIMIZED: Process every frame (1) or skip (2+)
