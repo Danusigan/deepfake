@@ -1,5 +1,5 @@
 """
-File handling module - FIXED: Animated GIF + UI Update after each process
+File handling module - WITH ANIMATED GIF IN TARGET WINDOW
 """
 
 from typing import Optional, Callable
@@ -161,24 +161,22 @@ def select_target_path(path: Optional[str] = None):
 
 
 def handle_target_selection(path):
-    """Handle target selection - WITH ANIMATED GIF + RESET OUTPUT"""
+    """Handle target selection - WITH ANIMATED GIF IN TARGET WINDOW"""
     print(f"[DEBUG] handle_target_selection: {path}")
     
     if path:
         path = path.strip('{}').strip()
     
-    # CRITICAL: Stop any existing animations and reset output display
+    # CRITICAL: Stop animations and reset output
     stop_all_animations()
     
     if _output_label:
         _output_label.configure(image="", text="Process to view result")
         _output_label.image = None
-        print("[DEBUG] Output label cleared")
     
     if _qr_code_label:
         _qr_code_label.configure(image="", text="QR Code")
         _qr_code_label.image = None
-        print("[DEBUG] QR label cleared")
     
     # Force UI update
     if _root:
@@ -196,9 +194,12 @@ def handle_target_selection(path):
         elif path and is_gif(path):
             roop.globals.target_path = path
             update_status(f"Loading GIF: {os.path.basename(path)}")
-            # CRITICAL: Start animated GIF after brief delay
-            if _root:
-                _root.after(100, lambda: show_animated_target_preview(path))
+            print(f"[DEBUG] Starting GIF animation for target: {path}")
+            # CRITICAL: Start animated GIF in target window
+            if _root and _target_label:
+                _root.after(150, lambda: show_animated_target_preview(path))
+            else:
+                print("[DEBUG] ERROR: _root or _target_label is None!")
             
         elif path and is_video(path):
             roop.globals.target_path = path
@@ -215,22 +216,26 @@ def handle_target_selection(path):
 
 
 def show_animated_target_preview(gif_path):
-    """Show ANIMATED GIF in target preview"""
-    print(f"[DEBUG] Starting target GIF animation: {gif_path}")
+    """Show ANIMATED GIF in target preview window"""
+    print(f"[DEBUG] show_animated_target_preview called: {gif_path}")
+    print(f"[DEBUG] _target_label: {_target_label}")
+    print(f"[DEBUG] _root: {_root}")
+    
     try:
         if _target_label and _root:
+            print("[DEBUG] Creating animated GIF preview for target...")
             success = create_animated_gif_preview(gif_path, (280, 180), _target_label, _root)
             if success:
-                update_status(f"✅ GIF loaded: {os.path.basename(gif_path)}")
-                print("[DEBUG] Target GIF animation started")
+                update_status(f"✅ GIF playing: {os.path.basename(gif_path)}")
+                print("[DEBUG] ✅ Target GIF animation started successfully!")
             else:
-                print("[DEBUG] GIF animation failed, using static")
+                print("[DEBUG] ❌ GIF animation failed, using static fallback")
                 preview_img = render_image_preview_contain(gif_path, (280, 180))
                 _target_label.configure(image=preview_img, text="")
                 _target_label.image = preview_img
                 update_status(f"GIF: {os.path.basename(gif_path)}")
         else:
-            print("[DEBUG] Target label or root is None!")
+            print(f"[DEBUG] ❌ Cannot animate: _target_label={_target_label}, _root={_root}")
     except Exception as e:
         print(f"[ERROR] Target GIF animation: {e}")
         import traceback
@@ -284,7 +289,7 @@ def select_output_path(start_callback: Callable[[], None]):
     print("[DEBUG] Starting callback")
     start_callback()
     
-    # Schedule output display with longer delay for GIF
+    # Schedule output display
     delay = 3000 if is_gif(target_path) else 2000
     print(f"[DEBUG] Scheduling output check in {delay}ms")
     if _root:
@@ -292,12 +297,12 @@ def select_output_path(start_callback: Callable[[], None]):
 
 
 def check_and_display_output(path):
-    """Display output - WITH ANIMATED GIF + FORCE UPDATE"""
+    """Display output - WITH ANIMATED GIF"""
     print(f"[DEBUG] check_and_display_output: {path}")
     
     try:
         if not os.path.exists(path):
-            print(f"[DEBUG] File not found, retrying in 1s...")
+            print(f"[DEBUG] File not found, retrying...")
             if _root:
                 _root.after(1000, lambda: check_and_display_output(path))
             return
@@ -306,7 +311,7 @@ def check_and_display_output(path):
         print(f"[DEBUG] File exists: {file_size} bytes")
         
         if file_size == 0:
-            print("[DEBUG] File is empty, retrying...")
+            print("[DEBUG] File empty, retrying...")
             if _root:
                 _root.after(500, lambda: check_and_display_output(path))
             return
@@ -316,13 +321,12 @@ def check_and_display_output(path):
         if _root:
             _root.update_idletasks()
         
-        # CRITICAL: Stop previous animations before showing new output
+        # Stop previous animations
         stop_all_animations()
         
         if is_gif(path):
             print("[DEBUG] Displaying output GIF")
-            update_status("✅ GIF complete! Loading preview...")
-            # CRITICAL: Start animated output GIF
+            update_status("✅ GIF complete!")
             if _root:
                 _root.after(200, lambda: show_animated_output_preview(path))
         elif is_video(path):
@@ -331,7 +335,6 @@ def check_and_display_output(path):
             if _output_label and prev:
                 _output_label.configure(image=prev, text="")
                 _output_label.image = prev
-                print("[DEBUG] Video displayed")
             update_status("✅ Video complete!")
         elif is_image(path):
             print("[DEBUG] Displaying image")
@@ -339,10 +342,9 @@ def check_and_display_output(path):
             if _output_label and prev:
                 _output_label.configure(image=prev, text="")
                 _output_label.image = prev
-                print("[DEBUG] Image displayed")
             update_status("✅ Image complete!")
         
-        # CRITICAL: Force UI update
+        # Force update
         if _root:
             _root.update()
         
@@ -350,33 +352,30 @@ def check_and_display_output(path):
         if _root:
             _root.after(400, lambda: generate_qr_for_output(path))
         
-        print("[DEBUG] Output display complete")
+        print("[DEBUG] Output displayed")
         
     except Exception as e:
-        print(f"[ERROR] Display output: {e}")
+        print(f"[ERROR] Display: {e}")
         import traceback
         traceback.print_exc()
 
 
 def show_animated_output_preview(gif_path):
     """Show ANIMATED GIF in output preview"""
-    print(f"[DEBUG] Starting output GIF animation: {gif_path}")
+    print(f"[DEBUG] show_animated_output_preview: {gif_path}")
     try:
         if _output_label and _root:
             success = create_animated_gif_preview(gif_path, (350, 200), _output_label, _root)
             if success:
-                update_status(f"✅ GIF complete! Playing...")
+                update_status(f"✅ GIF playing!")
                 print("[DEBUG] Output GIF animation started")
             else:
-                print("[DEBUG] Output GIF animation failed, static fallback")
+                print("[DEBUG] Animation failed")
                 prev = render_image_preview_contain(gif_path, (350, 200))
                 _output_label.configure(image=prev, text="")
                 _output_label.image = prev
-                update_status("✅ GIF complete!")
-        else:
-            print("[DEBUG] Output label or root is None!")
     except Exception as e:
-        print(f"[ERROR] Output GIF animation: {e}")
+        print(f"[ERROR] Output GIF: {e}")
         import traceback
         traceback.print_exc()
 
