@@ -99,36 +99,38 @@ class TargetBrowserDialog(ctk.CTkToplevel):
                         font=("Segoe UI", 14), text_color="#8b949e").pack(pady=50)
             return
         
-        for i in range(5): 
+        # Use 4 columns so previews are larger and easier to see
+        for i in range(4): 
             scroll_frame.grid_columnconfigure(i, weight=1)
         
         for idx, path in enumerate(media_files):
-            r, c = divmod(idx, 5)
+            r, c = divmod(idx, 4)
             
             card = ctk.CTkFrame(scroll_frame, fg_color="#1e232e", corner_radius=8)
             card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
             
+            # Larger preview frames for better visibility
             preview_frame = ctk.CTkFrame(card, fg_color="#0d1117", corner_radius=6, 
-                                        width=200, height=150)
-            preview_frame.pack(padx=5, pady=5, fill="both", expand=True)
+                                        width=480, height=360)
+            preview_frame.pack(padx=12, pady=12, fill="both", expand=True)
             preview_frame.pack_propagate(False)
             
             lbl = ctk.CTkLabel(preview_frame, text="")
-            lbl.pack(pady=5, padx=5, fill="both", expand=True)
+            lbl.pack(pady=10, padx=10, fill="both", expand=True)
             
-            # FIXED: Load preview immediately (no self.after delay)
-            self.load_preview(path, (200, 150), lbl)
+            # Load larger preview immediately
+            self.load_preview(path, (480, 360), lbl)
             
             filename = os.path.basename(path)
-            if len(filename) > 20:
-                filename = filename[:17] + "..."
-            name_lbl = ctk.CTkLabel(card, text=filename, font=("Segoe UI", 9), 
+            if len(filename) > 40:
+                filename = filename[:37] + "..."
+            name_lbl = ctk.CTkLabel(card, text=filename, font=("Segoe UI", 13), 
                                    text_color="#8b949e")
             name_lbl.pack(pady=(0, 5))
             
-            select_btn = ctk.CTkButton(card, text="Select", height=28,
+            select_btn = ctk.CTkButton(card, text="Select", height=40,
                          fg_color=COLOR_PINK, hover_color=COLOR_PINK_HOVER,
-                         font=("Segoe UI", 11, "bold"),
+                         font=("Segoe UI", 14, "bold"),
                          command=lambda p=path: self._select(p))
             select_btn.pack(fill="x", padx=5, pady=(0, 5))
 
