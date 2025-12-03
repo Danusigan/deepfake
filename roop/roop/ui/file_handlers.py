@@ -297,7 +297,7 @@ def select_output_path(start_callback: Callable[[], None]):
 
 
 def check_and_display_output(path):
-    """Display output - WITH ANIMATED GIF"""
+    """Display output - WITH ANIMATED GIF AND FULLSCREEN"""
     print(f"[DEBUG] check_and_display_output: {path}")
     
     try:
@@ -329,6 +329,8 @@ def check_and_display_output(path):
             update_status("✅ GIF complete!")
             if _root:
                 _root.after(200, lambda: show_animated_output_preview(path))
+                # Show fullscreen GIF
+                _root.after(400, lambda: _show_fullscreen_output(path))
         elif is_video(path):
             print("[DEBUG] Displaying video")
             prev = render_video_preview_contain(path, (350, 200))
@@ -336,6 +338,9 @@ def check_and_display_output(path):
                 _output_label.configure(image=prev, text="")
                 _output_label.image = prev
             update_status("✅ Video complete!")
+            # Show fullscreen video
+            if _root:
+                _root.after(500, lambda: _show_fullscreen_output(path))
         elif is_image(path):
             print("[DEBUG] Displaying image")
             prev = render_image_preview_contain(path, (350, 200))
@@ -343,6 +348,9 @@ def check_and_display_output(path):
                 _output_label.configure(image=prev, text="")
                 _output_label.image = prev
             update_status("✅ Image complete!")
+            # Show fullscreen image
+            if _root:
+                _root.after(500, lambda: _show_fullscreen_output(path))
         
         # Force update
         if _root:
@@ -356,6 +364,18 @@ def check_and_display_output(path):
         
     except Exception as e:
         print(f"[ERROR] Display: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _show_fullscreen_output(path):
+    """Display output in fullscreen"""
+    print(f"[DEBUG] _show_fullscreen_output: {path}")
+    try:
+        from .fullscreen_display import show_output_fullscreen
+        show_output_fullscreen(path, _root)
+    except Exception as e:
+        print(f"[ERROR] Fullscreen display: {e}")
         import traceback
         traceback.print_exc()
 
