@@ -15,13 +15,13 @@ reference_frame_number = 0
 similar_face_distance = 0.85
 
 temp_frame_format = 'jpg'  # OPTIMIZED: JPG is faster than PNG
-temp_frame_quality = 85     # OPTIMIZED: Good quality, faster processing
+temp_frame_quality = 92     # HIGH QUALITY
 output_video_encoder = 'libx264'
-output_video_quality = 45   # OPTIMIZED: Balanced quality/speed
+output_video_quality = 35   # HIGH QUALITY (lower = better)
 
 max_memory = None
-execution_providers = ['CUDAExecutionProvider', 'cpu']  # OPTIMIZED: Try GPU first
-execution_threads = 4       # OPTIMIZED: Use multiple threads
+execution_providers = ['CUDAExecutionProvider', 'cpu']  # GPU acceleration
+execution_threads = 8       # Multi-threading
 log_level = 'error'
 
 FIXED_OUTPUT_DIR = r'C:\Users\sanji\Desktop\Project of Mine all UG\Rextro\deepfake\roop\targets\Outputs'
@@ -36,30 +36,35 @@ if not os.path.exists(FIXED_OUTPUT_DIR):
         print(f"[PIPELINE] Error creating output directory: {e}")
 
 # ============================================
-# OPTIMIZED QUALITY SETTINGS FOR SPEED
+# HIGH QUALITY SETTINGS - BALANCED WITH SPEED
 # ============================================
 
-# Face blending settings - OPTIMIZED
-FACE_MASK_BLUR = 10              # OPTIMIZED: Reduced blur for speed
-FACE_MASK_PADDING = 0.3          # OPTIMIZED: Less padding
-BLEND_RATIO = 0.95               # OPTIMIZED: Slightly reduced
+# Face blending settings
+FACE_MASK_BLUR = 15              # Good quality
+FACE_MASK_PADDING = 0.35         # Good coverage
+BLEND_RATIO = 0.98               # High blend quality
 
 # Enhancement settings - DISABLED FOR SPEED
-ENABLE_FACE_ENHANCER = False     # OPTIMIZED: Disabled (biggest speed gain)
-FACE_ENHANCER_BLEND = 0.5        
-COLOR_CORRECTION = False         # OPTIMIZED: Disabled for speed
-SHARPEN_OUTPUT = False           # OPTIMIZED: Disabled for speed
+ENABLE_FACE_ENHANCER = False     # DISABLED: 4x speed gain
+FACE_ENHANCER_BLEND = 0.0        
+COLOR_CORRECTION = False         # DISABLED: 2x speed gain
+SHARPEN_OUTPUT = False           # DISABLED: Speed gain
 
-# Face detection - OPTIMIZED
-FACE_DETECTION_CONFIDENCE = 0.6  # OPTIMIZED: Slightly higher threshold
+# Face detection
+FACE_DETECTION_CONFIDENCE = 0.6  
 
 # Post-processing - DISABLED FOR SPEED
-SMOOTH_EDGES = False             # OPTIMIZED: Disabled for speed
-EDGE_BLUR_AMOUNT = 3             
+SMOOTH_EDGES = False             
+EDGE_BLUR_AMOUNT = 0             
 
-# GIF Processing settings - OPTIMIZED
-GIF_QUALITY = 85                 # OPTIMIZED: Reduced from 95
+# GIF Processing settings - HIGH QUALITY + GOOD SPEED
+GIF_QUALITY = 92                 # HIGH QUALITY (was 80)
 GIF_OPTIMIZE = True              
 GIF_PROCESSING_MODE = 'direct'
-GIF_MAX_SIZE = 800              # OPTIMIZED: Resize large GIFs for speed
-GIF_SKIP_FRAMES = 1             # OPTIMIZED: Process every frame (1) or skip (2+)
+GIF_MAX_SIZE = 800              # Don't resize too aggressively
+GIF_SKIP_FRAMES = 1             # Process ALL frames for quality (1 = no skip)
+GIF_RESIZE_THRESHOLD = 1000     # Only resize very large GIFs
+
+# Video processing
+VIDEO_MAX_SIZE = 1080           # HD quality
+VIDEO_SKIP_FRAMES = 1           # Process all frames

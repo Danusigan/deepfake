@@ -20,35 +20,6 @@ def render_image_preview(path: str, size: Tuple[int, int]) -> ctk.CTkImage:
         blank_img = Image.new('RGB', size, color='#2b2b2b')
         return ctk.CTkImage(blank_img, size=size)
 
-def render_image_preview_contain(path: str, size: Tuple[int, int]) -> ctk.CTkImage:
-    """Render an image preview using CONTAIN mode - shows full image without cropping"""
-    try:
-        img = ImageOps.contain(Image.open(path), size, Image.LANCZOS)
-        return ctk.CTkImage(img, size=img.size)
-    except Exception as e:
-        print(f"Error rendering image preview: {e}")
-        blank_img = Image.new('RGB', size, color='#2b2b2b')
-        return ctk.CTkImage(blank_img, size=size)
-
-
-def render_video_preview_contain(path: str, size: Tuple[int, int], frame_num: int = 0) -> Optional[ctk.CTkImage]:
-    """Render a video frame preview using CONTAIN mode - shows full frame without cropping"""
-    try:
-        cap = cv2.VideoCapture(path)
-        if frame_num:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        ret, frame = cap.read()
-        cap.release()
-        
-        if ret:
-            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            img = ImageOps.contain(img, size, Image.LANCZOS)
-            return ctk.CTkImage(img, size=img.size)
-    except Exception as e:
-        print(f"Error rendering video preview: {e}")
-    
-    blank_img = Image.new('RGB', size, color='#2b2b2b')
-    return ctk.CTkImage(blank_img, size=size)
 
 def render_video_preview(path: str, size: Tuple[int, int], frame_num: int = 0) -> Optional[ctk.CTkImage]:
     """Render a video frame preview at specified size"""
@@ -74,7 +45,7 @@ def render_video_preview(path: str, size: Tuple[int, int], frame_num: int = 0) -
 
 
 class AnimatedGIF:
-    """Class to handle animated GIF playback in CTkLabel"""
+    """Class to handle animated GIF playback in CTkLabel - OPTIMIZED"""
     
     def __init__(self, gif_path: str, size: Tuple[int, int], label: ctk.CTkLabel, root):
         self.gif_path = gif_path
@@ -84,37 +55,49 @@ class AnimatedGIF:
         self.frames = []
         self.current_frame = 0
         self.is_playing = False
-        self.delay = 100  # Default delay in ms
+        self.delay = 100
         self.after_id = None
         
         self.load_frames()
     
     def load_frames(self):
-        """Load all frames from GIF"""
+        """Load all frames from GIF - OPTIMIZED"""
         try:
             img = Image.open(self.gif_path)
             
-            # Get frame delay (duration)
+            # Get frame delay
             try:
                 self.delay = img.info.get('duration', 100)
+                if self.delay < 30:
+                    self.delay = 30
             except:
                 self.delay = 100
             
-            # Extract all frames
-            for frame in ImageSequence.Iterator(img):
-                # Resize frame
-                frame_resized = ImageOps.fit(frame.convert('RGB'), self.size, Image.LANCZOS)
-                # Convert to CTkImage
-                ctk_frame = ctk.CTkImage(frame_resized, size=self.size)
-                self.frames.append(ctk_frame)
+            # OPTIMIZATION: Limit number of frames for very long GIFs
+            frame_count = 0
+            max_frames = 100  # Limit to 100 frames for UI responsiveness
             
-            print(f"Loaded {len(self.frames)} frames from GIF")
+            # Extract frames
+            for frame in ImageSequence.Iterator(img):
+                if frame_count >= max_frames:
+                    print(f"[DEBUG] GIF has {frame_count}+ frames, limiting to {max_frames} for preview")
+                    break
+                
+                # Resize frame using CONTAIN to show full image
+                frame_resized = ImageOps.contain(frame.convert('RGB'), self.size, Image.LANCZOS)
+                # Convert to CTkImage
+                ctk_frame = ctk.CTkImage(frame_resized, size=frame_resized.size)
+                self.frames.append(ctk_frame)
+                frame_count += 1
+            
+            print(f"[DEBUG] Loaded {len(self.frames)} frames from GIF")
         except Exception as e:
             print(f"Error loading GIF frames: {e}")
     
     def play(self):
         """Start playing the GIF animation"""
         if len(self.frames) == 0:
+            print("[DEBUG] No frames to play")
             return False
         
         self.is_playing = True
@@ -150,7 +133,7 @@ class AnimatedGIF:
             self.is_playing = False
 
 
-# Global storage for animated GIF players (prevents garbage collection)
+# Global storage for animated GIF players
 _gif_players = {}
 
 
@@ -158,7 +141,6 @@ def create_animated_gif_preview(gif_path: str, size: Tuple[int, int],
                                 label: ctk.CTkLabel, root) -> bool:
     """
     Create and play an animated GIF preview in a CTkLabel
-    
     Returns True if successful, False otherwise
     """
     global _gif_players
@@ -175,14 +157,18 @@ def create_animated_gif_preview(gif_path: str, size: Tuple[int, int],
         
         # Start playing
         if gif_player.play():
-            # Store reference to prevent garbage collection
+            # Store reference
             _gif_players[label_id] = gif_player
+            print(f"[DEBUG] Started GIF animation for label {label_id}")
             return True
         else:
+            print(f"[DEBUG] Failed to start GIF animation")
             return False
     
     except Exception as e:
         print(f"Error creating animated GIF preview: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -192,16 +178,16 @@ def stop_all_animations():
     for player in _gif_players.values():
         player.stop()
     _gif_players.clear()
+    print("[DEBUG] Stopped all GIF animations")
 
 
 def render_gif_preview(path: str, size: Tuple[int, int]) -> ctk.CTkImage:
     """Render first frame of GIF as static preview (fallback)"""
     try:
         img = Image.open(path)
-        # Get first frame
         img.seek(0)
-        img_resized = ImageOps.fit(img.convert('RGB'), size, Image.LANCZOS)
-        return ctk.CTkImage(img_resized, size=size)
+        img_resized = ImageOps.contain(img.convert('RGB'), size, Image.LANCZOS)
+        return ctk.CTkImage(img_resized, size=img_resized.size)
     except Exception as e:
         print(f"Error rendering GIF preview: {e}")
         blank_img = Image.new('RGB', size, color='#2b2b2b')

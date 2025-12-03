@@ -98,9 +98,12 @@ def handle_pipeline_target_selection(path):
 
 def pipeline_process():
     """Process in pipeline mode"""
-    from .file_handlers import update_status
+    from .file_handlers import update_status, check_and_display_output
+    
+    print("[DEBUG] pipeline_process started")
     
     if not roop.globals.PIPELINE_ENABLED:
+        print("[DEBUG] Pipeline not enabled, returning")
         return
     
     if not roop.globals.source_path:
@@ -119,10 +122,25 @@ def pipeline_process():
     
     try:
         from roop.core import start as core_start
+        print("[DEBUG] Calling core_start")
         core_start()
-        update_status(f"✓ Pipeline complete! Saved to Outputs folder")
-        _root.after(1500, start_cycle_timer)
+        
+        print(f"[DEBUG] Processing complete, output: {roop.globals.output_path}")
+        update_status(f"✅ Pipeline complete! Saved to Outputs folder")
+        
+        # CRITICAL: Ensure output is displayed with retry logic
+        if roop.globals.output_path:
+            print("[DEBUG] Scheduling output display...")
+            _root.after(500, lambda: check_and_display_output(roop.globals.output_path))
+        else:
+            print(f"[DEBUG] No output path set!")
+        
+        # Start timer for next cycle
+        _root.after(2000, start_cycle_timer)
     except Exception as e:
+        print(f"[ERROR] Pipeline error: {e}")
+        import traceback
+        traceback.print_exc()
         update_status(f"Pipeline error: {str(e)}")
         prompt_pipeline_recapture()
 

@@ -138,12 +138,11 @@ def is_gif(path: str) -> bool:
     """Check if file is a GIF"""
     return path and path.lower().endswith('.gif')
 
-
 def process_gif(source_path: str, target_gif_path: str, output_path: str) -> None:
-    """Process GIF file frame by frame - OPTIMIZED for speed"""
+    """Process GIF - HIGH QUALITY with speed optimizations"""
     from PIL import Image, ImageSequence
     
-    update_status('Processing GIF (optimized mode)...')
+    update_status('Processing GIF in HIGH QUALITY mode...')
     
     # Open target GIF
     target_gif = Image.open(target_gif_path)
@@ -151,23 +150,24 @@ def process_gif(source_path: str, target_gif_path: str, output_path: str) -> Non
     # Get original dimensions
     original_size = target_gif.size
     
-    # OPTIMIZATION: Resize large GIFs for speed
+    # Smart resize: Only resize VERY large GIFs
     max_size = roop.globals.GIF_MAX_SIZE if hasattr(roop.globals, 'GIF_MAX_SIZE') else 800
-    if original_size[0] > max_size or original_size[1] > max_size:
+    resize_threshold = roop.globals.GIF_RESIZE_THRESHOLD if hasattr(roop.globals, 'GIF_RESIZE_THRESHOLD') else 1000
+    
+    if original_size[0] > resize_threshold or original_size[1] > resize_threshold:
         ratio = min(max_size / original_size[0], max_size / original_size[1])
         new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
-        update_status(f'Resizing GIF: {original_size} → {new_size} for speed')
+        update_status(f'Resizing for speed: {original_size} → {new_size}')
     else:
         new_size = original_size
-    
-    update_status(f'GIF size: {new_size[0]}x{new_size[1]}')
+        update_status(f'Processing at original size: {new_size[0]}x{new_size[1]}')
     
     # Load source face ONCE
     update_status('Loading source face...')
     source_face = get_one_face(cv2.imread(source_path))
     
     if source_face is None:
-        update_status('❌ No face in source image!')
+        update_status('❌ No face detected in source!')
         return
     
     update_status('✅ Source face loaded')
@@ -188,24 +188,33 @@ def process_gif(source_path: str, target_gif_path: str, output_path: str) -> Non
         
         target_gif.seek(0)
         
-        # OPTIMIZATION: Skip frames for long GIFs
+        # Smart frame skipping: Only skip for VERY long GIFs
         skip_frames = roop.globals.GIF_SKIP_FRAMES if hasattr(roop.globals, 'GIF_SKIP_FRAMES') else 1
-        if frame_count > 100 and skip_frames == 1:
-            skip_frames = 2
-            update_status(f'Long GIF ({frame_count} frames) - processing every 2nd frame')
         
-        frames_to_process = frame_count // skip_frames
-        update_status(f'Processing {frames_to_process} frames...')
+        if frame_count > 200:
+            skip_frames = 2
+            update_status(f'Very long GIF ({frame_count} frames) - processing every 2nd frame')
+        elif frame_count > 100:
+            update_status(f'Processing all {frame_count} frames (may take time)')
+        else:
+            update_status(f'Processing all {frame_count} frames')
+        
+        frames_to_process = (frame_count + skip_frames - 1) // skip_frames
         
         frame_idx = 0
+        processed_count = 0
+        
         for frame in ImageSequence.Iterator(target_gif):
             # Skip frames if needed
             if frame_idx % skip_frames != 0:
                 frame_idx += 1
                 continue
             
-            if frame_idx % 10 == 0:  # Update every 10 frames
-                update_status(f'Frame {frame_idx}/{frame_count}...')
+            processed_count += 1
+            
+            # Update status every 5 frames
+            if processed_count % 5 == 0:
+                update_status(f'Processing frame {processed_count}/{frames_to_process}...')
             
             # Convert and resize
             frame_rgb = frame.convert('RGB')
@@ -223,7 +232,7 @@ def process_gif(source_path: str, target_gif_path: str, output_path: str) -> Non
                 for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
                     frame_bgr = frame_processor.process_frame(source_face, target_face, frame_bgr)
             
-            # Convert back
+            # Convert back to PIL
             frame_rgb_processed = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             pil_frame = Image.fromarray(frame_rgb_processed.astype('uint8'))
             processed_frames.append(pil_frame)
@@ -241,12 +250,10 @@ def process_gif(source_path: str, target_gif_path: str, output_path: str) -> Non
             
             frame_idx += 1
         
-        update_status(f'Detected {faces_found} faces in GIF')
+        update_status(f'Detected {faces_found} faces | Saving HIGH QUALITY GIF...')
         
-        # Save optimized GIF
-        update_status('Saving GIF...')
-        
-        gif_quality = roop.globals.GIF_QUALITY if hasattr(roop.globals, 'GIF_QUALITY') else 85
+        # Save with HIGH QUALITY settings
+        gif_quality = roop.globals.GIF_QUALITY if hasattr(roop.globals, 'GIF_QUALITY') else 92
         
         processed_frames[0].save(
             output_path,
@@ -259,7 +266,7 @@ def process_gif(source_path: str, target_gif_path: str, output_path: str) -> Non
         )
         
         output_size_mb = os.path.getsize(output_path) / (1024 * 1024)
-        update_status(f'✅ GIF done! {len(processed_frames)} frames, {output_size_mb:.2f}MB')
+        update_status(f'✅ HIGH QUALITY GIF complete! {len(processed_frames)} frames, {output_size_mb:.2f}MB')
         
     except Exception as e:
         update_status(f'❌ GIF error: {e}')
