@@ -12,6 +12,7 @@ import signal
 import shutil
 import argparse
 import time
+import requests  # ADD THIS LINE
 import onnxruntime
 import tensorflow
 import roop.globals
@@ -26,6 +27,7 @@ except ImportError as e:
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+from roop.supabase_utils import upload_image_and_generate_qr
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -173,9 +175,30 @@ def start() -> None:
             frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
             frame_processor.post_process()
         if is_image(roop.globals.output_path):
-            update_status('Processing to image succeed! Generating QR Code.')
-            if ui:
-                ui.generate_qr_for_output(roop.globals.output_path)
+            update_status('Processing to image succeed!')
+            # Auto-upload to Supabase
+            try:
+                with open(roop.globals.output_path, 'rb') as f:
+                    image_bytes = f.read()
+                upload_result = upload_image_and_generate_qr(image_bytes, os.path.basename(roop.globals.output_path))
+                update_status(f'✅ Image uploaded to Supabase!')
+                update_status(f'📷 Image URL: {upload_result["url"]}')
+                update_status(f'🔗 QR URL: {upload_result["qr_url"]}')
+                
+                # Save QR code locally for display
+                qr_local_path = roop.globals.output_path.replace('.png', '_qr.png')
+                try:
+                    qr_bytes = requests.get(upload_result["qr_url"]).content
+                    with open(qr_local_path, 'wb') as f:
+                        f.write(qr_bytes)
+                    update_status(f'💾 QR code saved to: {qr_local_path}')
+                except Exception as qr_err:
+                    update_status(f'⚠️ Could not download QR: {qr_err}')
+                
+            except Exception as e:
+                update_status(f'❌ Supabase upload failed: {e}')
+                import traceback
+                traceback.print_exc()
         else:
             update_status('Processing to image failed!')
         return
@@ -219,11 +242,61 @@ def start() -> None:
     update_status('Cleaning temporary resources...')
     clean_temp(roop.globals.target_path)
     if is_video(roop.globals.output_path):
-        update_status('Processing to video succeed! Generating QR Code.')
-        if ui:
-            ui.generate_qr_for_output(roop.globals.output_path)
+        update_status('Processing to video succeed!')
+        # Auto-upload video to Supabase
+        try:
+            with open(roop.globals.output_path, 'rb') as f:
+                video_bytes = f.read()
+            upload_result = upload_image_and_generate_qr(video_bytes, os.path.basename(roop.globals.output_path))
+            update_status(f'✅ Video uploaded to Supabase!')
+            update_status(f'🎬 Video URL: {upload_result["url"]}')
+            update_status(f'🔗 QR URL: {upload_result["qr_url"]}')
+            
+            # Save QR code locally
+            qr_local_path = roop.globals.output_path.replace('.mp4', '_qr.png')
+            try:
+                qr_bytes = requests.get(upload_result["qr_url"]).content
+                with open(qr_local_path, 'wb') as f:
+                    f.write(qr_bytes)
+                update_status(f'💾 QR code saved to: {qr_local_path}')
+            except Exception as qr_err:
+                update_status(f'⚠️ Could not download QR: {qr_err}')
+        except Exception as e:
+            update_status(f'❌ Supabase upload failed: {e}')
+            import traceback
+            traceback.print_exc()
     else:
         update_status('Processing to video failed!')
+
+    try:
+        output_path = getattr(roop.globals, "output_path", None) or output_path  # preserve existing variable if present
+        if output_path and os.path.isfile(output_path):
+            with open(output_path, "rb") as f:
+                file_bytes = f.read()
+            try:
+                upload_result = upload_image_and_generate_qr(file_bytes, os.path.basename(output_path))
+                # upload_result shape depends on roop.supabase_utils implementation; try to extract a URL
+                url = None
+                if isinstance(upload_result, dict):
+                    url = upload_result.get("url") or upload_result.get("public_url") or upload_result.get("data", {}).get("url")
+                if url:
+                    try:
+                        update_status(f"Uploaded to Supabase: {url}")
+                    except Exception:
+                        print(f"Uploaded to Supabase: {url}")
+                else:
+                    try:
+                        update_status("Uploaded to Supabase (no URL returned)")
+                    except Exception:
+                        print("Uploaded to Supabase (no URL returned)")
+            except Exception as e:
+                try:
+                    update_status(f"Supabase upload failed: {e}")
+                except Exception:
+                    print(f"Supabase upload failed: {e}")
+    except Exception as e:
+        # don't break main flow if something goes wrong here
+        print(f"Supabase upload step skipped/error: {e}")
 
 
 def destroy() -> None:

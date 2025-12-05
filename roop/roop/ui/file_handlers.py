@@ -180,7 +180,7 @@ def generate_qr_for_output(path: str):
     """Generate QR code for output file"""
     try:
         if _qr_code_label:
-            qr_img = generate_qr_code(f"https://share.roop/{os.path.basename(path)}", (180, 180))
+            qr_img = generate_qr_code(f"https://envlcgzlopkallmmtcaq.supabase.co/storage/v1/object/public/images/generated/{os.path.basename(path)}", (180, 180))
             _qr_code_label.configure(image=qr_img, text="")
             
             if _output_label:
