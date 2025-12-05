@@ -12,7 +12,12 @@ import signal
 import shutil
 import argparse
 import time
+<<<<<<< HEAD
 import requests  # ADD THIS LINE
+=======
+import cv2
+import numpy as np
+>>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
 import onnxruntime
 import tensorflow
 import roop.globals
@@ -27,7 +32,11 @@ except ImportError as e:
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+<<<<<<< HEAD
 from roop.supabase_utils import upload_image_and_generate_qr
+=======
+from roop.face_analyser import get_one_face
+>>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -133,7 +142,149 @@ def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
         ui.update_status(message)
 
 
+def is_gif(path: str) -> bool:
+    """Check if file is a GIF"""
+    return path and path.lower().endswith('.gif')
+
+def process_gif(source_path: str, target_gif_path: str, output_path: str) -> None:
+    """Process GIF - HIGH QUALITY with speed optimizations"""
+    from PIL import Image, ImageSequence
+    
+    update_status('Processing GIF in HIGH QUALITY mode...')
+    
+    # Open target GIF
+    target_gif = Image.open(target_gif_path)
+    
+    # Get original dimensions
+    original_size = target_gif.size
+    
+    # Smart resize: Only resize VERY large GIFs
+    max_size = roop.globals.GIF_MAX_SIZE if hasattr(roop.globals, 'GIF_MAX_SIZE') else 800
+    resize_threshold = roop.globals.GIF_RESIZE_THRESHOLD if hasattr(roop.globals, 'GIF_RESIZE_THRESHOLD') else 1000
+    
+    if original_size[0] > resize_threshold or original_size[1] > resize_threshold:
+        ratio = min(max_size / original_size[0], max_size / original_size[1])
+        new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
+        update_status(f'Resizing for speed: {original_size} → {new_size}')
+    else:
+        new_size = original_size
+        update_status(f'Processing at original size: {new_size[0]}x{new_size[1]}')
+    
+    # Load source face ONCE
+    update_status('Loading source face...')
+    source_face = get_one_face(cv2.imread(source_path))
+    
+    if source_face is None:
+        update_status('❌ No face detected in source!')
+        return
+    
+    update_status('✅ Source face loaded')
+    
+    processed_frames = []
+    frame_delays = []
+    faces_found = 0
+    
+    try:
+        # Get frame count
+        frame_count = 0
+        try:
+            while True:
+                target_gif.seek(frame_count)
+                frame_count += 1
+        except EOFError:
+            pass
+        
+        target_gif.seek(0)
+        
+        # Smart frame skipping: Only skip for VERY long GIFs
+        skip_frames = roop.globals.GIF_SKIP_FRAMES if hasattr(roop.globals, 'GIF_SKIP_FRAMES') else 1
+        
+        if frame_count > 200:
+            skip_frames = 2
+            update_status(f'Very long GIF ({frame_count} frames) - processing every 2nd frame')
+        elif frame_count > 100:
+            update_status(f'Processing all {frame_count} frames (may take time)')
+        else:
+            update_status(f'Processing all {frame_count} frames')
+        
+        frames_to_process = (frame_count + skip_frames - 1) // skip_frames
+        
+        frame_idx = 0
+        processed_count = 0
+        
+        for frame in ImageSequence.Iterator(target_gif):
+            # Skip frames if needed
+            if frame_idx % skip_frames != 0:
+                frame_idx += 1
+                continue
+            
+            processed_count += 1
+            
+            # Update status every 5 frames
+            if processed_count % 5 == 0:
+                update_status(f'Processing frame {processed_count}/{frames_to_process}...')
+            
+            # Convert and resize
+            frame_rgb = frame.convert('RGB')
+            if frame_rgb.size != new_size:
+                frame_rgb = frame_rgb.resize(new_size, Image.LANCZOS)
+            
+            frame_array = np.array(frame_rgb)
+            frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+            
+            # Face detection and swap
+            target_face = get_one_face(frame_bgr)
+            
+            if target_face is not None:
+                faces_found += 1
+                for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
+                    frame_bgr = frame_processor.process_frame(source_face, target_face, frame_bgr)
+            
+            # Convert back to PIL
+            frame_rgb_processed = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            pil_frame = Image.fromarray(frame_rgb_processed.astype('uint8'))
+            processed_frames.append(pil_frame)
+            
+            # Frame delay
+            try:
+                delay = frame.info.get('duration', 100)
+                if skip_frames > 1:
+                    delay *= skip_frames
+                if delay < 20:
+                    delay = 20
+                frame_delays.append(delay)
+            except:
+                frame_delays.append(100)
+            
+            frame_idx += 1
+        
+        update_status(f'Detected {faces_found} faces | Saving HIGH QUALITY GIF...')
+        
+        # Save with HIGH QUALITY settings
+        gif_quality = roop.globals.GIF_QUALITY if hasattr(roop.globals, 'GIF_QUALITY') else 92
+        
+        processed_frames[0].save(
+            output_path,
+            save_all=True,
+            append_images=processed_frames[1:],
+            duration=frame_delays,
+            loop=0,
+            optimize=True,
+            quality=gif_quality,
+        )
+        
+        output_size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        update_status(f'✅ HIGH QUALITY GIF complete! {len(processed_frames)} frames, {output_size_mb:.2f}MB')
+        
+    except Exception as e:
+        update_status(f'❌ GIF error: {e}')
+        import traceback
+        traceback.print_exc()
+        raise
+
 def start() -> None:
+    print("[DEBUG] start() function called")
+    
     if not roop.globals.source_path:
         update_status('Error: Please select or capture a source image/face.')
         return
@@ -145,7 +296,10 @@ def start() -> None:
     if roop.globals.PIPELINE_ENABLED:
         timestamp = int(time.time())
         
-        if has_image_extension(roop.globals.target_path):
+        # FIXED: Proper extension detection for GIF
+        if is_gif(roop.globals.target_path):
+            ext = '.gif'
+        elif has_image_extension(roop.globals.target_path):
             ext = '.png'
         elif is_video(roop.globals.target_path):
             ext = '.mp4'
@@ -157,6 +311,7 @@ def start() -> None:
         roop.globals.output_path = os.path.join(roop.globals.FIXED_OUTPUT_DIR, output_filename)
         
         update_status(f'Pipeline: Saving to {output_filename}')
+        print(f"[DEBUG] Pipeline output path: {roop.globals.output_path}")
     
     if not roop.globals.output_path:
         update_status('Error: Output path not set.')
@@ -166,7 +321,31 @@ def start() -> None:
         if not frame_processor.pre_start():
             return
     
+    # ADDED: Handle GIF processing
+    if is_gif(roop.globals.target_path):
+        print("[DEBUG] Processing GIF")
+        try:
+            process_gif(roop.globals.source_path, roop.globals.target_path, roop.globals.output_path)
+            
+            if os.path.exists(roop.globals.output_path):
+                print(f"[DEBUG] GIF output created: {roop.globals.output_path}")
+                update_status('✅ GIF processing complete!')
+                if ui:
+                    print("[DEBUG] Calling ui.check_and_display_output for GIF")
+                    ui.check_and_display_output(roop.globals.output_path)
+            else:
+                print("[DEBUG] GIF output file not found!")
+                update_status('Processing to GIF failed!')
+        except Exception as e:
+            print(f"[ERROR] GIF processing error: {e}")
+            import traceback
+            traceback.print_exc()
+            update_status(f'GIF processing error: {e}')
+        return
+    
+    # Handle image processing
     if has_image_extension(roop.globals.target_path):
+        print("[DEBUG] Processing Image")
         if predict_image(roop.globals.target_path):
             destroy()
         shutil.copy2(roop.globals.target_path, roop.globals.output_path)
@@ -175,6 +354,7 @@ def start() -> None:
             frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
             frame_processor.post_process()
         if is_image(roop.globals.output_path):
+<<<<<<< HEAD
             update_status('Processing to image succeed!')
             # Auto-upload to Supabase
             try:
@@ -199,10 +379,20 @@ def start() -> None:
                 update_status(f'❌ Supabase upload failed: {e}')
                 import traceback
                 traceback.print_exc()
+=======
+            print(f"[DEBUG] Image output created: {roop.globals.output_path}")
+            update_status('✅ Image processing complete!')
+            if ui:
+                print("[DEBUG] Calling ui.check_and_display_output for Image")
+                ui.check_and_display_output(roop.globals.output_path)
+>>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
         else:
+            print("[DEBUG] Image output file not found!")
             update_status('Processing to image failed!')
         return
     
+    # Handle video processing
+    print("[DEBUG] Processing Video")
     if predict_video(roop.globals.target_path):
         destroy()
     update_status('Creating temporary resources...')
@@ -242,6 +432,7 @@ def start() -> None:
     update_status('Cleaning temporary resources...')
     clean_temp(roop.globals.target_path)
     if is_video(roop.globals.output_path):
+<<<<<<< HEAD
         update_status('Processing to video succeed!')
         # Auto-upload video to Supabase
         try:
@@ -265,7 +456,15 @@ def start() -> None:
             update_status(f'❌ Supabase upload failed: {e}')
             import traceback
             traceback.print_exc()
+=======
+        print(f"[DEBUG] Video output created: {roop.globals.output_path}")
+        update_status('✅ Video processing complete!')
+        if ui:
+            print("[DEBUG] Calling ui.check_and_display_output for Video")
+            ui.check_and_display_output(roop.globals.output_path)
+>>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
     else:
+        print("[DEBUG] Video output file not found!")
         update_status('Processing to video failed!')
 
     try:

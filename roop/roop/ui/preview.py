@@ -43,25 +43,40 @@ def create_preview(parent):
 
 def close_preview():
     """Close preview window"""
+    global PREVIEW
     if PREVIEW:
-        PREVIEW.withdraw()
+        try:
+            PREVIEW.withdraw()
+        except:
+            pass
 
 
 def toggle_preview():
     """Toggle preview window visibility"""
-    if PREVIEW.state() == 'normal':
-        PREVIEW.unbind('<Right>')
-        PREVIEW.unbind('<Left>')
-        PREVIEW.withdraw()
-        clear_predictor()
-    elif roop.globals.source_path and roop.globals.target_path:
-        init_preview()
-        update_preview(roop.globals.reference_frame_number)
-        PREVIEW.deiconify()
+    global PREVIEW
+    if not PREVIEW:
+        return
+    
+    try:
+        if PREVIEW.state() == 'normal':
+            PREVIEW.unbind('<Right>')
+            PREVIEW.unbind('<Left>')
+            PREVIEW.withdraw()
+            clear_predictor()
+        elif roop.globals.source_path and roop.globals.target_path:
+            init_preview()
+            update_preview(roop.globals.reference_frame_number)
+            PREVIEW.deiconify()
+    except:
+        pass
 
 
 def init_preview():
     """Initialize preview window"""
+    global PREVIEW
+    if not PREVIEW:
+        return
+    
     PREVIEW.title('Preview')
     
     if is_image(roop.globals.target_path):
