@@ -12,12 +12,9 @@ import signal
 import shutil
 import argparse
 import time
-<<<<<<< HEAD
-import requests  # ADD THIS LINE
-=======
+import requests
 import cv2
 import numpy as np
->>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
 import onnxruntime
 import tensorflow
 import roop.globals
@@ -32,11 +29,8 @@ except ImportError as e:
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
-<<<<<<< HEAD
 from roop.supabase_utils import upload_image_and_generate_qr
-=======
 from roop.face_analyser import get_one_face
->>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -354,8 +348,9 @@ def start() -> None:
             frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
             frame_processor.post_process()
         if is_image(roop.globals.output_path):
-<<<<<<< HEAD
-            update_status('Processing to image succeed!')
+            print(f"[DEBUG] Image output created: {roop.globals.output_path}")
+            update_status('✅ Image processing complete!')
+            
             # Auto-upload to Supabase
             try:
                 with open(roop.globals.output_path, 'rb') as f:
@@ -364,6 +359,10 @@ def start() -> None:
                 update_status(f'✅ Image uploaded to Supabase!')
                 update_status(f'📷 Image URL: {upload_result["url"]}')
                 update_status(f'🔗 QR URL: {upload_result["qr_url"]}')
+                
+                # Store URLs for UI QR generation
+                if ui and hasattr(ui, 'file_handlers'):
+                    ui.file_handlers.store_supabase_urls(upload_result["url"], upload_result["qr_url"])
                 
                 # Save QR code locally for display
                 qr_local_path = roop.globals.output_path.replace('.png', '_qr.png')
@@ -379,13 +378,10 @@ def start() -> None:
                 update_status(f'❌ Supabase upload failed: {e}')
                 import traceback
                 traceback.print_exc()
-=======
-            print(f"[DEBUG] Image output created: {roop.globals.output_path}")
-            update_status('✅ Image processing complete!')
+            
             if ui:
                 print("[DEBUG] Calling ui.check_and_display_output for Image")
                 ui.check_and_display_output(roop.globals.output_path)
->>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
         else:
             print("[DEBUG] Image output file not found!")
             update_status('Processing to image failed!')
@@ -432,8 +428,9 @@ def start() -> None:
     update_status('Cleaning temporary resources...')
     clean_temp(roop.globals.target_path)
     if is_video(roop.globals.output_path):
-<<<<<<< HEAD
-        update_status('Processing to video succeed!')
+        print(f"[DEBUG] Video output created: {roop.globals.output_path}")
+        update_status('✅ Video processing complete!')
+        
         # Auto-upload video to Supabase
         try:
             with open(roop.globals.output_path, 'rb') as f:
@@ -442,6 +439,10 @@ def start() -> None:
             update_status(f'✅ Video uploaded to Supabase!')
             update_status(f'🎬 Video URL: {upload_result["url"]}')
             update_status(f'🔗 QR URL: {upload_result["qr_url"]}')
+            
+            # Store URLs for UI QR generation
+            if ui and hasattr(ui, 'file_handlers'):
+                ui.file_handlers.store_supabase_urls(upload_result["url"], upload_result["qr_url"])
             
             # Save QR code locally
             qr_local_path = roop.globals.output_path.replace('.mp4', '_qr.png')
@@ -456,46 +457,13 @@ def start() -> None:
             update_status(f'❌ Supabase upload failed: {e}')
             import traceback
             traceback.print_exc()
-=======
-        print(f"[DEBUG] Video output created: {roop.globals.output_path}")
-        update_status('✅ Video processing complete!')
+        
         if ui:
             print("[DEBUG] Calling ui.check_and_display_output for Video")
             ui.check_and_display_output(roop.globals.output_path)
->>>>>>> fa12cf0de631b8ff746453f4e9fd2ea62b4831e6
     else:
         print("[DEBUG] Video output file not found!")
         update_status('Processing to video failed!')
-
-    try:
-        output_path = getattr(roop.globals, "output_path", None) or output_path  # preserve existing variable if present
-        if output_path and os.path.isfile(output_path):
-            with open(output_path, "rb") as f:
-                file_bytes = f.read()
-            try:
-                upload_result = upload_image_and_generate_qr(file_bytes, os.path.basename(output_path))
-                # upload_result shape depends on roop.supabase_utils implementation; try to extract a URL
-                url = None
-                if isinstance(upload_result, dict):
-                    url = upload_result.get("url") or upload_result.get("public_url") or upload_result.get("data", {}).get("url")
-                if url:
-                    try:
-                        update_status(f"Uploaded to Supabase: {url}")
-                    except Exception:
-                        print(f"Uploaded to Supabase: {url}")
-                else:
-                    try:
-                        update_status("Uploaded to Supabase (no URL returned)")
-                    except Exception:
-                        print("Uploaded to Supabase (no URL returned)")
-            except Exception as e:
-                try:
-                    update_status(f"Supabase upload failed: {e}")
-                except Exception:
-                    print(f"Supabase upload failed: {e}")
-    except Exception as e:
-        # don't break main flow if something goes wrong here
-        print(f"Supabase upload step skipped/error: {e}")
 
 
 def destroy() -> None:

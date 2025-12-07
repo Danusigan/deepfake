@@ -1,5 +1,5 @@
 """
-Main window module - Modern AI UI Layout (Fixed Colors)
+Main window module - Ultra Modern Scrollable Design with Gradient Accents
 """
 
 from typing import Callable
@@ -26,27 +26,33 @@ _skip_audio_var = None
 _keep_frames_var = None
 _many_faces_var = None
 
-# --- MODERN AI STUDIO COLOR PALETTE ---
-COLOR_BG = "#0b0f19"          # Very dark slate background
-COLOR_HEADER_BG = "#111625"   # Slightly lighter header
-COLOR_CARD_BG = "#161b22"     # Card background
-COLOR_PREVIEW_BG = "#0d1117"  # Recessed background for images
-COLOR_BORDER = "#30363d"      # Subtle border color
+# --- ULTRA MODERN COLOR PALETTE (Like Reface, Deepfake.com, FaceSwap Live) ---
+COLOR_BG = "#0a0e1a"          # Deep dark navy
+COLOR_HEADER_BG = "#0f1419"   # Darker header
+COLOR_CARD_BG = "#141824"     # Card background
+COLOR_PREVIEW_BG = "#0d1117"  # Preview background
+COLOR_BORDER = "#1e2736"      # Subtle border
 
-# Neon Accents & Hover States
-COLOR_CYAN = "#00f2ea"        
-COLOR_CYAN_HOVER = "#00b8d4"  # <--- Added this
+# Vibrant Neon Gradients
+COLOR_CYAN = "#00f2fe"        # Electric cyan
+COLOR_CYAN_HOVER = "#00d4ea"
+COLOR_CYAN_DARK = "#0088cc"
 
-COLOR_PINK = "#ff0055"        
-COLOR_PINK_HOVER = "#C2185B"  # <--- Added this
+COLOR_PINK = "#ff0080"        # Hot pink
+COLOR_PINK_HOVER = "#e6006f"
+COLOR_PINK_LIGHT = "#ff3399"
 
-COLOR_GREEN = "#00e676"       
-COLOR_GREEN_HOVER = "#00c853" # <--- Added this
+COLOR_PURPLE = "#bf40ff"      # Vivid purple
+COLOR_PURPLE_HOVER = "#a020f0"
 
-COLOR_PURPLE = "#d500f9"      
+COLOR_GREEN = "#00ff88"       # Neon green
+COLOR_GREEN_HOVER = "#00e673"
 
-COLOR_TEXT_PRIMARY = "#f0f6fc"
-COLOR_TEXT_SECONDARY = "#8b949e"
+COLOR_ORANGE = "#ff6b35"      # Vibrant orange
+
+COLOR_TEXT_PRIMARY = "#ffffff"
+COLOR_TEXT_SECONDARY = "#a0aec0"
+COLOR_TEXT_MUTED = "#64748b"
 
 if DND_AVAILABLE:
     class CTk(ctk.CTk, TkinterDnD.DnDWrapper):
@@ -78,177 +84,282 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     ctk.set_default_color_theme("dark-blue")
     
     ROOT = CTk()
-    ROOT.state('zoomed')  # Maximizes window, recommended for Windows laptops
-    
-
-    ROOT.title(f'{roop.metadata.name} {roop.metadata.version}')
-    ROOT.geometry('1100x850')
+    ROOT.state('zoomed')
+    ROOT.title(f'{roop.metadata.name} {roop.metadata.version} - Pro Edition')
+    ROOT.geometry('1100x900')
     ROOT.configure(fg_color=COLOR_BG)
     ROOT.resizable(True, True)
     
-    # === MAIN GRID ===
+    # === MAIN CONTAINER - SCROLLABLE ===
     ROOT.grid_columnconfigure(0, weight=1)
-    # Row weights determine what expands
     ROOT.grid_rowconfigure(0, weight=0)  # Header (Fixed)
-    ROOT.grid_rowconfigure(1, weight=1)  # Layer 1: Inputs (Expands)
-    ROOT.grid_rowconfigure(2, weight=1)  # Layer 2: Output/QR (Expands)
-    ROOT.grid_rowconfigure(3, weight=0)  # Settings (Fixed)
-    ROOT.grid_rowconfigure(4, weight=0)  # Button (Fixed)
+    ROOT.grid_rowconfigure(1, weight=1)  # Scrollable Content (Expands)
 
     # ==========================================================
-    # 1. HEADER BAR
+    # 1. FIXED HEADER BAR (Glassmorphism Style)
     # ==========================================================
-    header_frame = ctk.CTkFrame(ROOT, fg_color=COLOR_HEADER_BG, corner_radius=0, height=55)
+    header_frame = ctk.CTkFrame(ROOT, fg_color=COLOR_HEADER_BG, corner_radius=0, height=70)
     header_frame.grid(row=0, column=0, sticky="ew", padx=0, pady=0)
-    header_frame.grid_columnconfigure(1, weight=1) # Spacer
+    header_frame.grid_columnconfigure(1, weight=1)
+    header_frame.grid_propagate(False)
 
-    # Brand / Logo Area
-    title_label = ctk.CTkLabel(header_frame, text="🎭 ROOP", font=("Segoe UI", 16, "bold"), 
-                               text_color=COLOR_TEXT_PRIMARY)
-    title_label.grid(row=0, column=0, padx=20, pady=10)
+    # Brand with Gradient Effect
+    brand_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+    brand_frame.grid(row=0, column=0, padx=25, pady=15)
+    
+    title_label = ctk.CTkLabel(brand_frame, text="🎭 ROOP", 
+                               font=("Segoe UI", 22, "bold"), 
+                               text_color=COLOR_CYAN)
+    title_label.pack(side="left")
+    
+    pro_badge = ctk.CTkLabel(brand_frame, text="PRO", 
+                            font=("Segoe UI", 10, "bold"),
+                            text_color=COLOR_BG,
+                            fg_color=COLOR_PINK,
+                            corner_radius=4,
+                            padx=8, pady=2)
+    pro_badge.pack(side="left", padx=(8, 0))
 
-    # Status (Center)
-    status_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-    status_frame.grid(row=0, column=1)
-    status_icon = ctk.CTkLabel(status_frame, text="●", font=("Segoe UI", 14), text_color=COLOR_GREEN)
-    status_icon.pack(side="left", padx=(0, 5))
-    status_label = ctk.CTkLabel(status_frame, text="System Ready", 
-                                font=("Segoe UI", 12), text_color=COLOR_TEXT_SECONDARY)
+    # Status (Center) with Glow Effect
+    status_outer = ctk.CTkFrame(header_frame, fg_color="transparent")
+    status_outer.grid(row=0, column=1)
+    
+    status_container = ctk.CTkFrame(status_outer, fg_color="#1a1f2e", corner_radius=20, 
+                                   border_width=1, border_color=COLOR_GREEN)
+    status_container.pack()
+    
+    status_inner = ctk.CTkFrame(status_container, fg_color="transparent")
+    status_inner.pack(padx=15, pady=8)
+    
+    status_icon = ctk.CTkLabel(status_inner, text="●", font=("Segoe UI", 16), 
+                              text_color=COLOR_GREEN)
+    status_icon.pack(side="left", padx=(0, 8))
+    
+    status_label = ctk.CTkLabel(status_inner, text="Ready to Process", 
+                                font=("Segoe UI", 13, "bold"), 
+                                text_color=COLOR_TEXT_PRIMARY)
     status_label.pack(side="left")
 
-    # Pipeline Toggle (Right)
+    # Pipeline Toggle (Right) - Modern Switch
+    pipeline_container = ctk.CTkFrame(header_frame, fg_color="transparent")
+    pipeline_container.grid(row=0, column=2, padx=25)
+    
     _pipeline_switch_var = ctk.BooleanVar(value=roop.globals.PIPELINE_ENABLED)
     pipe_switch = ctk.CTkSwitch(
-        header_frame, 
-        text="Auto mode", 
+        pipeline_container, 
+        text="🤖 Auto Mode", 
         variable=_pipeline_switch_var, 
         command=pipeline.handle_pipeline_toggle, 
         progress_color=COLOR_PINK,
-        font=("Segoe UI", 11, "bold"),
+        button_color=COLOR_TEXT_PRIMARY,
+        font=("Segoe UI", 12, "bold"),
         text_color=COLOR_TEXT_PRIMARY,
-        fg_color="#333"
+        fg_color="#2d3748",
+        width=60,
+        height=28
     )
-    pipe_switch.grid(row=0, column=2, padx=20)
+    pipe_switch.pack()
 
     # ==========================================================
-    # 2. LAYER ONE: INPUTS (Source & Target)
+    # 2. SCROLLABLE MAIN CONTENT (OPTIMIZED)
     # ==========================================================
-    # Added pady at bottom to create the "Gap" between layers
-    layer_one = ctk.CTkFrame(ROOT, fg_color="transparent")
-    layer_one.grid(row=1, column=0, sticky="nsew", padx=20, pady=(20, 10))
-    layer_one.grid_columnconfigure(0, weight=1)
-    layer_one.grid_columnconfigure(1, weight=1)
-    layer_one.grid_rowconfigure(0, weight=1)
+    scroll_container = ctk.CTkScrollableFrame(ROOT, fg_color="transparent", 
+                                              corner_radius=0,
+                                              scrollbar_button_color=COLOR_CYAN,
+                                              scrollbar_button_hover_color=COLOR_CYAN_HOVER)
+    scroll_container.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+    scroll_container.grid_columnconfigure(0, weight=1)
+    
+    # Add padding with simple frame
+    content_wrapper = ctk.CTkFrame(scroll_container, fg_color="transparent")
+    content_wrapper.pack(fill="both", expand=True, padx=30, pady=30)
+    content_wrapper.grid_columnconfigure(0, weight=1)
 
-    # Source Card
-    source_card = create_modern_card(layer_one, "SOURCE FACE", COLOR_CYAN, True)
-    source_card['frame'].grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+    # ==========================================================
+    # 3. INPUT SECTION (Source & Target) - BIGGER CARDS
+    # ==========================================================
+    input_section = ctk.CTkFrame(content_wrapper, fg_color="transparent")
+    input_section.pack(fill="x", pady=(0, 30))
+    input_section.grid_columnconfigure(0, weight=1)
+    input_section.grid_columnconfigure(1, weight=1)
+
+    # Source Card - BIGGER
+    source_card = create_premium_card(input_section, "SOURCE FACE", COLOR_CYAN, True, 400)
+    source_card['frame'].grid(row=0, column=0, sticky="nsew", padx=(0, 15))
     _source_label = source_card['label']
     _camera_switch_var = source_card['camera_var']
     capture_btn = source_card['action_btn']
 
-    # Target Card
-    target_card = create_modern_card(layer_one, "TARGET MEDIA", COLOR_PINK, False)
-    target_card['frame'].grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+    # Target Card - BIGGER
+    target_card = create_premium_card(input_section, "TARGET MEDIA", COLOR_PINK, False, 400)
+    target_card['frame'].grid(row=0, column=1, sticky="nsew", padx=(15, 0))
     _target_label = target_card['label']
 
     # ==========================================================
-    # 3. LAYER TWO: OUTPUTS (Preview & QR)
+    # 4. OUTPUT SECTION (Result & QR) - EQUAL SIZES
     # ==========================================================
-    # Added pady at top to reinforce the gap
-    layer_two = ctk.CTkFrame(ROOT, fg_color="transparent")
-    layer_two.grid(row=2, column=0, sticky="nsew", padx=20, pady=(10, 20))
-    layer_two.grid_columnconfigure(0, weight=3) # Output takes more space
-    layer_two.grid_columnconfigure(1, weight=1) # QR takes less
-    layer_two.grid_rowconfigure(0, weight=1)
+    output_section = ctk.CTkFrame(content_wrapper, fg_color="transparent")
+    output_section.pack(fill="x", pady=(0, 30))
+    output_section.grid_columnconfigure(0, weight=1)
+    output_section.grid_columnconfigure(1, weight=1)
 
-    # Output Card
-    out_frame = ctk.CTkFrame(layer_two, fg_color=COLOR_CARD_BG, corner_radius=12, 
-                             border_width=1, border_color=COLOR_BORDER)
-    out_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-    out_frame.grid_columnconfigure(0, weight=1)
-    out_frame.grid_rowconfigure(1, weight=1)
+    # Output Card - BIGGER & EQUAL
+    output_card = create_output_card(output_section, "OUTPUT RESULT", COLOR_GREEN)
+    output_card['frame'].grid(row=0, column=0, sticky="nsew", padx=(0, 15))
+    output_label = output_card['label']
 
-    ctk.CTkLabel(out_frame, text="OUTPUT RESULT", font=("Segoe UI", 11, "bold"), 
-                 text_color=COLOR_GREEN).grid(row=0, column=0, sticky="w", padx=15, pady=(15, 5))
+    # QR Card - BIGGER & EQUAL SIZE
+    qr_card = create_qr_card(output_section)
+    qr_card['frame'].grid(row=0, column=1, sticky="nsew", padx=(15, 0))
+    qr_code_label = qr_card['label']
+
+    # ==========================================================
+    # 5. SETTINGS SECTION (Beautiful Organized Panels)
+    # ==========================================================
+    settings_section = ctk.CTkFrame(content_wrapper, fg_color=COLOR_CARD_BG, 
+                                   corner_radius=20, border_width=1, 
+                                   border_color=COLOR_BORDER)
+    settings_section.pack(fill="x", pady=(0, 30))
     
-    output_label = ctk.CTkLabel(out_frame, text="Process to view result", 
-                               fg_color=COLOR_PREVIEW_BG, corner_radius=8, 
-                               text_color=COLOR_TEXT_SECONDARY, font=("Segoe UI", 11))
-    output_label.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 15))
-
-    # QR Card
-    qr_frame = ctk.CTkFrame(layer_two, fg_color=COLOR_CARD_BG, corner_radius=12,
-                            border_width=1, border_color=COLOR_BORDER)
-    qr_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-    qr_frame.grid_columnconfigure(0, weight=1)
-    qr_frame.grid_rowconfigure(1, weight=1)
-
-    ctk.CTkLabel(qr_frame, text="MOBILE SHARE", font=("Segoe UI", 11, "bold"), 
-                 text_color=COLOR_PURPLE).grid(row=0, column=0, sticky="w", padx=15, pady=(15, 5))
+    # Settings Header
+    settings_header = ctk.CTkFrame(settings_section, fg_color="transparent", height=60)
+    settings_header.pack(fill="x", padx=25, pady=(20, 15))
+    settings_header.pack_propagate(False)
     
-    qr_code_label = ctk.CTkLabel(qr_frame, text="QR Code", 
-                                fg_color=COLOR_PREVIEW_BG, corner_radius=8, 
-                                text_color=COLOR_TEXT_SECONDARY, font=("Segoe UI", 10))
-    qr_code_label.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 15))
+    header_left = ctk.CTkFrame(settings_header, fg_color="transparent")
+    header_left.pack(side="left", fill="y")
+    
+    ctk.CTkLabel(header_left, text="⚡ ADVANCED SETTINGS", 
+                font=("Segoe UI", 16, "bold"), 
+                text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+    
+    ctk.CTkLabel(header_left, text="Fine-tune your deepfake quality", 
+                font=("Segoe UI", 11), 
+                text_color=COLOR_TEXT_MUTED).pack(side="left", padx=(15, 0))
 
-    # ==========================================================
-    # 4. SETTINGS STRIP
-    # ==========================================================
-    settings_bar = ctk.CTkFrame(ROOT, fg_color=COLOR_CARD_BG, corner_radius=10)
-    settings_bar.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 15))
-    settings_bar.grid_columnconfigure(3, weight=1) # Push slider to right or center
+    # Settings Grid
+    settings_grid = ctk.CTkFrame(settings_section, fg_color="transparent")
+    settings_grid.pack(fill="x", padx=25, pady=(0, 25))
+    settings_grid.grid_columnconfigure(0, weight=1)
+    settings_grid.grid_columnconfigure(1, weight=1)
 
-    # Title
-    ctk.CTkLabel(settings_bar, text="SETTINGS", font=("Segoe UI", 10, "bold"), 
-                 text_color=COLOR_TEXT_SECONDARY).pack(side="left", padx=(15, 10))
+    # LEFT COLUMN
+    left_col = ctk.CTkFrame(settings_grid, fg_color="transparent")
+    left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 15))
 
-    # Options
+    # General Settings Panel
+    general_panel = create_settings_panel(left_col, "⚙️ GENERAL", COLOR_CYAN)
+    general_panel.pack(fill="x", pady=(0, 20))
+    
+    _many_faces_var = ctk.BooleanVar(value=roop.globals.many_faces)
+    create_checkbox(general_panel, "Process All Faces in Frame", _many_faces_var, COLOR_CYAN,
+                   lambda: setattr(roop.globals, 'many_faces', _many_faces_var.get()))
+    
+    _keep_frames_var = ctk.BooleanVar(value=roop.globals.keep_frames)
+    create_checkbox(general_panel, "Keep Temporary Frames", _keep_frames_var, COLOR_PURPLE,
+                   lambda: setattr(roop.globals, 'keep_frames', _keep_frames_var.get()))
+
+    # Face Quality Panel
+    face_panel = create_settings_panel(left_col, "👤 FACE QUALITY", COLOR_PINK)
+    face_panel.pack(fill="x", pady=(0, 20))
+    
+    create_slider(face_panel, "Face Mask Blur (Edge Smoothness)", 1, 50, 15, COLOR_PINK, 
+                 lambda v: setattr(roop.globals, 'FACE_MASK_BLUR', int(v)))
+    
+    create_slider(face_panel, "Face Mask Padding (Coverage Area)", 0.0, 1.0, 0.35, COLOR_PINK,
+                 lambda v: setattr(roop.globals, 'FACE_MASK_PADDING', float(v)), is_float=True)
+    
+    create_slider(face_panel, "Blend Ratio (Swap Strength)", 0.0, 1.0, 0.98, COLOR_PINK,
+                 lambda v: setattr(roop.globals, 'BLEND_RATIO', float(v)), is_float=True)
+    
+    create_slider(face_panel, "Face Detection Confidence", 0.1, 1.0, 0.6, COLOR_PINK,
+                 lambda v: setattr(roop.globals, 'FACE_DETECTION_CONFIDENCE', float(v)), is_float=True)
+
+    # Video Settings Panel
+    video_panel = create_settings_panel(left_col, "🎬 VIDEO", COLOR_GREEN)
+    video_panel.pack(fill="x")
+    
     _keep_fps_var = ctk.BooleanVar(value=True)
     roop.globals.keep_fps = True
-    ctk.CTkCheckBox(settings_bar, text="Keep FPS", variable=_keep_fps_var,
-                   command=lambda: setattr(roop.globals, 'keep_fps', _keep_fps_var.get()),
-                   font=("Segoe UI", 11), fg_color=COLOR_CYAN, hover_color=COLOR_CYAN_HOVER,
-                   border_width=2).pack(side="left", padx=10, pady=10)
-
+    create_checkbox(video_panel, "Keep Original FPS", _keep_fps_var, COLOR_GREEN,
+                   lambda: setattr(roop.globals, 'keep_fps', _keep_fps_var.get()))
+    
     _skip_audio_var = ctk.BooleanVar(value=False)
-    ctk.CTkCheckBox(settings_bar, text="Skip Audio", variable=_skip_audio_var,
-                   command=lambda: setattr(roop.globals, 'skip_audio', _skip_audio_var.get()),
-                   font=("Segoe UI", 11), fg_color=COLOR_PINK, hover_color=COLOR_PINK_HOVER,
-                   border_width=2).pack(side="left", padx=10, pady=10)
+    create_checkbox(video_panel, "Remove Audio Track", _skip_audio_var, COLOR_ORANGE,
+                   lambda: setattr(roop.globals, 'skip_audio', _skip_audio_var.get()))
+    
+    create_slider(video_panel, "Video Output Quality (Lower = Better)", 0, 100, 35, COLOR_GREEN,
+                 lambda v: setattr(roop.globals, 'output_video_quality', int(v)))
+    
+    create_slider(video_panel, "Video Max Resolution", 480, 1920, 1080, COLOR_GREEN,
+                 lambda v: setattr(roop.globals, 'VIDEO_MAX_SIZE', int(v)))
 
-    # Quality Slider (Right aligned in strip)
-    qual_frame = ctk.CTkFrame(settings_bar, fg_color="transparent")
-    qual_frame.pack(side="right", padx=15, fill="x", expand=True)
-    
-    qual_val_lbl = ctk.CTkLabel(qual_frame, text="35%", font=("Segoe UI", 11, "bold"), 
-                               text_color=COLOR_TEXT_PRIMARY, width=35)
-    qual_val_lbl.pack(side="right")
+    # RIGHT COLUMN
+    right_col = ctk.CTkFrame(settings_grid, fg_color="transparent")
+    right_col.grid(row=0, column=1, sticky="nsew", padx=(15, 0))
 
-    quality_slider = ctk.CTkSlider(qual_frame, from_=0, to=100, number_of_steps=100,
-                                  button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_GREEN)
-    quality_slider.set(35)
-    quality_slider.pack(side="right", padx=10, fill="x", expand=True)
+    # GIF Settings Panel
+    gif_panel = create_settings_panel(right_col, "🎞️ GIF PROCESSING", COLOR_PURPLE)
+    gif_panel.pack(fill="x", pady=(0, 20))
     
-    ctk.CTkLabel(qual_frame, text="Quality", font=("Segoe UI", 11), 
-                 text_color=COLOR_TEXT_SECONDARY).pack(side="right")
+    create_slider(gif_panel, "GIF Output Quality", 50, 100, 92, COLOR_PURPLE,
+                 lambda v: setattr(roop.globals, 'GIF_QUALITY', int(v)))
     
-    quality_slider.configure(command=lambda v: (
-        setattr(roop.globals, 'output_video_quality', int(v)),
-        qual_val_lbl.configure(text=f"{int(v)}%")
-    ))
+    create_slider(gif_panel, "GIF Max Dimension (pixels)", 400, 1200, 800, COLOR_PURPLE,
+                 lambda v: setattr(roop.globals, 'GIF_MAX_SIZE', int(v)))
+    
+    create_slider(gif_panel, "GIF Frame Skip (1 = No Skip)", 1, 5, 1, COLOR_PURPLE,
+                 lambda v: setattr(roop.globals, 'GIF_SKIP_FRAMES', int(v)))
+
+    # Image Settings Panel
+    image_panel = create_settings_panel(right_col, "🖼️ IMAGE OUTPUT", COLOR_CYAN)
+    image_panel.pack(fill="x", pady=(0, 20))
+    
+    create_slider(image_panel, "Image Quality (PNG Compression)", 70, 100, 95, COLOR_CYAN,
+                 lambda v: setattr(roop.globals, 'OUTPUT_IMAGE_QUALITY', int(v)))
+    
+    create_slider(image_panel, "Temp Frame Quality", 0, 100, 92, COLOR_CYAN,
+                 lambda v: setattr(roop.globals, 'temp_frame_quality', int(v)))
+
+    # Advanced Processing Panel
+    advanced_panel = create_settings_panel(right_col, "🔬 ADVANCED", COLOR_ORANGE)
+    advanced_panel.pack(fill="x")
+    
+    create_slider(advanced_panel, "Face Similarity Threshold", 0.1, 1.0, 0.85, COLOR_ORANGE,
+                 lambda v: setattr(roop.globals, 'similar_face_distance', float(v)), is_float=True)
+    
+    create_slider(advanced_panel, "Execution Threads (CPU)", 1, 16, 8, COLOR_ORANGE,
+                 lambda v: setattr(roop.globals, 'execution_threads', int(v)))
+    
+    # Enhancement toggles
+    enhance_frame = ctk.CTkFrame(advanced_panel, fg_color="transparent")
+    enhance_frame.pack(fill="x", pady=(8, 0))
+    
+    enhance_var = ctk.BooleanVar(value=getattr(roop.globals, 'ENABLE_FACE_ENHANCER', False))
+    create_checkbox(enhance_frame, "Enable Face Enhancement (Slower)", enhance_var, COLOR_ORANGE,
+                   lambda: setattr(roop.globals, 'ENABLE_FACE_ENHANCER', enhance_var.get()))
+    
+    color_var = ctk.BooleanVar(value=getattr(roop.globals, 'COLOR_CORRECTION', False))
+    create_checkbox(enhance_frame, "Auto Color Correction", color_var, COLOR_ORANGE,
+                   lambda: setattr(roop.globals, 'COLOR_CORRECTION', color_var.get()))
 
     # ==========================================================
-    # 5. ACTION BUTTON (Compact & Sleek)
+    # 6. ACTION BUTTON (Gradient Style)
     # ==========================================================
-    # Made button smaller height (45) and added side padding so it's not edge-to-edge
-    start_btn = ctk.CTkButton(ROOT, text="START PROCESSING", height=45,
+    action_container = ctk.CTkFrame(content_wrapper, fg_color="transparent")
+    action_container.pack(fill="x", pady=(0, 30))
+    
+    start_btn = ctk.CTkButton(action_container, 
+                             text="🚀 START PROCESSING",
+                             height=60,
                              command=lambda: file_handlers.select_output_path(start),
-                             fg_color=COLOR_GREEN, hover_color=COLOR_GREEN_HOVER,
-                             text_color="#000000", font=("Segoe UI", 14, "bold"), 
-                             corner_radius=8)
-    start_btn.grid(row=4, column=0, sticky="ew", padx=100, pady=(0, 20))
-
+                             fg_color=COLOR_GREEN, 
+                             hover_color=COLOR_GREEN_HOVER,
+                             text_color=COLOR_BG, 
+                             font=("Segoe UI", 16, "bold"), 
+                             corner_radius=15,
+                             border_width=0)
+    start_btn.pack(fill="x", padx=100)
 
     # References
     file_handlers.init_file_handler_references(ROOT, status_label, _target_label, 
@@ -263,61 +374,90 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     _source_label.bind('<Button-1>', lambda e: file_handlers.select_source_path())
     _target_label.bind('<Button-1>', lambda e: file_handlers.select_target_path())
     
+    # Force render all widgets
+    ROOT.update_idletasks()
+    scroll_container.update_idletasks()
+    
     return ROOT
 
 
-def create_modern_card(parent, title, accent_color, has_camera):
-    """Helper: Create a stylish dark card with neon accent"""
-    card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=12,
-                        border_width=1, border_color=COLOR_BORDER)
+def create_premium_card(parent, title, accent_color, has_camera, height=400):
+    """Create premium card with gradient accent"""
+    card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
+                       border_width=2, border_color=COLOR_BORDER, height=height)
     card.grid_columnconfigure(0, weight=1)
     card.grid_rowconfigure(1, weight=1)
+    card.grid_propagate(False)
     
-    # Card Header
-    header = ctk.CTkFrame(card, fg_color="transparent", height=35)
-    header.grid(row=0, column=0, sticky="ew", padx=15, pady=(12, 5))
+    # Header with gradient line
+    header_container = ctk.CTkFrame(card, fg_color="transparent")
+    header_container.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+    header_container.grid_columnconfigure(0, weight=1)
     
-    # Title with colorful dash
-    title_lbl = ctk.CTkLabel(header, text=f"▍ {title}", 
-                            font=("Segoe UI", 11, "bold"), text_color=accent_color)
-    title_lbl.pack(side="left")
+    # Title with icon
+    title_frame = ctk.CTkFrame(header_container, fg_color="transparent")
+    title_frame.grid(row=0, column=0, sticky="w")
     
+    ctk.CTkLabel(title_frame, text="●", font=("Segoe UI", 20), 
+                text_color=accent_color).pack(side="left", padx=(0, 8))
+    
+    ctk.CTkLabel(title_frame, text=title, 
+                font=("Segoe UI", 14, "bold"), 
+                text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+    
+    # Camera switch if needed
     camera_var = None
     if has_camera:
         camera_var = ctk.BooleanVar(value=False)
-        cam_switch = ctk.CTkSwitch(header, text="Use Camera", variable=camera_var, 
+        cam_switch = ctk.CTkSwitch(header_container, text="📷 Camera", 
+                                  variable=camera_var, 
                                   command=camera.handle_camera_toggle,
-                                  progress_color=accent_color, button_color="#fff",
-                                  width=40, height=20, font=("Segoe UI", 10))
-        cam_switch.pack(side="right")
+                                  progress_color=accent_color,
+                                  button_color=COLOR_TEXT_PRIMARY,
+                                  font=("Segoe UI", 11, "bold"),
+                                  text_color=COLOR_TEXT_SECONDARY,
+                                  fg_color="#2d3748")
+        cam_switch.grid(row=0, column=1, sticky="e")
     
-    # Main Preview Area (Recessed)
-    preview_label = ctk.CTkLabel(card, 
-                                text="DRAG & DROP\nFILE HERE",
-                                fg_color=COLOR_PREVIEW_BG, corner_radius=8, 
-                                text_color=COLOR_TEXT_SECONDARY, font=("Segoe UI", 10, "bold"))
-    preview_label.grid(row=1, column=0, sticky="nsew", padx=15, pady=5)
+    # Gradient line
+    gradient_line = ctk.CTkFrame(header_container, fg_color=accent_color, 
+                                height=2, corner_radius=1)
+    gradient_line.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
     
-    # Action Button (Outline style or subtle)
+    # Preview Area with glow effect
+    preview_container = ctk.CTkFrame(card, fg_color=COLOR_PREVIEW_BG, 
+                                    corner_radius=15)
+    preview_container.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 15))
+    preview_container.grid_columnconfigure(0, weight=1)
+    preview_container.grid_rowconfigure(0, weight=1)
+    
+    preview_label = ctk.CTkLabel(preview_container, 
+                                text="DRAG & DROP\nOR CLICK HERE",
+                                fg_color="transparent",
+                                text_color=COLOR_TEXT_MUTED, 
+                                font=("Segoe UI", 12, "bold"))
+    preview_label.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+    
+    # Action Button
     if has_camera:
         btn_text = "📸 Capture Face"
         btn_cmd = lambda: camera.do_capture()
         btn_state = "disabled"
-        btn_fg = "#2c3e50"
+        btn_fg = "#2d3748"
     else:
-        btn_text = "📂 Select File"
+        btn_text = "📂 Browse Files"
         btn_cmd = lambda: file_handlers.select_target_path()
         btn_state = "normal"
         btn_fg = accent_color
     
-    action_btn = ctk.CTkButton(card, text=btn_text, height=32,
+    action_btn = ctk.CTkButton(card, text=btn_text, height=45,
                               command=btn_cmd, state=btn_state,
-                              fg_color="transparent", border_width=2,
-                              border_color=btn_fg, hover_color=btn_fg,
+                              fg_color=btn_fg, hover_color=accent_color,
                               text_color=COLOR_TEXT_PRIMARY,
-                              font=("Segoe UI", 11, "bold"),
-                              corner_radius=6)
-    action_btn.grid(row=2, column=0, sticky="ew", padx=40, pady=(10, 15))
+                              font=("Segoe UI", 13, "bold"),
+                              corner_radius=12,
+                              border_width=0)
+    action_btn.grid(row=2, column=0, sticky="ew", padx=30, pady=(0, 20))
     
     return {
         'frame': card,
@@ -325,6 +465,163 @@ def create_modern_card(parent, title, accent_color, has_camera):
         'action_btn': action_btn,
         'camera_var': camera_var
     }
+
+
+def create_output_card(parent, title, accent_color):
+    """Create output preview card"""
+    card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
+                       border_width=2, border_color=COLOR_BORDER, height=400)
+    card.grid_columnconfigure(0, weight=1)
+    card.grid_rowconfigure(1, weight=1)
+    card.grid_propagate(False)
+    
+    # Header
+    header = ctk.CTkFrame(card, fg_color="transparent")
+    header.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+    
+    ctk.CTkLabel(header, text="●", font=("Segoe UI", 20), 
+                text_color=accent_color).pack(side="left", padx=(0, 8))
+    ctk.CTkLabel(header, text=title, font=("Segoe UI", 14, "bold"), 
+                text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+    
+    # Preview
+    preview_label = ctk.CTkLabel(card, text="Result will appear here",
+                                fg_color=COLOR_PREVIEW_BG, corner_radius=15,
+                                text_color=COLOR_TEXT_MUTED, 
+                                font=("Segoe UI", 11))
+    preview_label.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+    
+    return {'frame': card, 'label': preview_label}
+
+
+def create_qr_card(parent):
+    """Create QR code card - SAME SIZE AS OUTPUT"""
+    card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
+                       border_width=2, border_color=COLOR_BORDER, height=400)
+    card.grid_columnconfigure(0, weight=1)
+    card.grid_rowconfigure(0, weight=1)
+    card.grid_propagate(False)
+    
+    # Center content
+    content = ctk.CTkFrame(card, fg_color="transparent")
+    content.grid(row=0, column=0)
+    
+    # Icon header
+    icon_frame = ctk.CTkFrame(content, fg_color="transparent")
+    icon_frame.pack(pady=(30, 15))
+    
+    ctk.CTkLabel(icon_frame, text="📱", font=("Segoe UI", 32)).pack()
+    
+    # Title
+    ctk.CTkLabel(content, text="SCAN TO VIEW", 
+                font=("Segoe UI", 14, "bold"), 
+                text_color=COLOR_PURPLE).pack(pady=(0, 15))
+    
+    # QR Code - BIG SQUARE (300x300)
+    qr_label = ctk.CTkLabel(content, text="QR Code\nWill Appear\nHere",
+                           fg_color=COLOR_PREVIEW_BG, corner_radius=15,
+                           text_color=COLOR_TEXT_MUTED, font=("Segoe UI", 10),
+                           width=300, height=300)
+    qr_label.pack(pady=(0, 15))
+    
+    # Helper text
+    ctk.CTkLabel(content, text="Scan with your phone camera", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_MUTED).pack()
+    
+    return {'frame': card, 'label': qr_label}
+
+
+def create_settings_panel(parent, title, accent_color):
+    """Create modern settings panel with proper sizing - FIXED"""
+    panel = ctk.CTkFrame(parent, fg_color="#1a1f2e", corner_radius=15,
+                        border_width=1, border_color=COLOR_BORDER)
+    
+    # Header
+    header = ctk.CTkFrame(panel, fg_color="transparent", height=40)
+    header.pack(fill="x", padx=20, pady=(15, 10))
+    header.pack_propagate(False)
+    
+    # Title with colored bullet
+    title_container = ctk.CTkFrame(header, fg_color="transparent")
+    title_container.pack(anchor="w", expand=True)
+    
+    ctk.CTkLabel(title_container, text="●", font=("Segoe UI", 12), 
+                text_color=accent_color).pack(side="left", padx=(0, 8))
+    
+    ctk.CTkLabel(title_container, text=title, font=("Segoe UI", 12, "bold"), 
+                text_color=COLOR_TEXT_PRIMARY).pack(side="left")
+    
+    # Thin accent line
+    ctk.CTkFrame(header, fg_color=accent_color, height=2, 
+                corner_radius=1).pack(fill="x", side="bottom")
+    
+    # Content area with minimum height
+    content = ctk.CTkFrame(panel, fg_color="transparent")
+    content.pack(fill="both", expand=True, padx=20, pady=(5, 15))
+    
+    # Force immediate render
+    panel.update_idletasks()
+    
+    return content
+
+
+def create_checkbox(parent, text, variable, color, command):
+    """Create styled checkbox - FIXED"""
+    cb = ctk.CTkCheckBox(parent, text=text, variable=variable,
+                        command=command, font=("Segoe UI", 11),
+                        fg_color=color, hover_color=color,
+                        border_width=2, corner_radius=6,
+                        text_color=COLOR_TEXT_SECONDARY)
+    cb.pack(anchor="w", pady=6, padx=5)
+    return cb
+
+
+def create_slider(parent, label, from_val, to_val, default, color, command, is_float=False):
+    """Create styled slider with label - FIXED"""
+    container = ctk.CTkFrame(parent, fg_color="transparent")
+    container.pack(fill="x", pady=8, padx=5)
+    
+    # Label and value
+    label_frame = ctk.CTkFrame(container, fg_color="transparent")
+    label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(label_frame, text=label, font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    if is_float:
+        val_text = f"{default:.2f}"
+    else:
+        val_text = str(int(default))
+    
+    val_label = ctk.CTkLabel(label_frame, text=val_text, 
+                            font=("Segoe UI", 10, "bold"), 
+                            text_color=COLOR_TEXT_PRIMARY)
+    val_label.pack(side="right")
+    
+    # Slider
+    steps = 100 if is_float else int(to_val - from_val)
+    slider = ctk.CTkSlider(container, from_=from_val, to=to_val, 
+                          number_of_steps=steps,
+                          button_color=COLOR_TEXT_PRIMARY, 
+                          progress_color=color,
+                          height=16, button_length=20)
+    slider.set(default)
+    slider.pack(fill="x")
+    
+    def on_change(v):
+        command(v)
+        if is_float:
+            val_label.configure(text=f"{float(v):.2f}")
+        else:
+            val_label.configure(text=str(int(v)))
+    
+    slider.configure(command=on_change)
+    
+    # Force update to show slider
+    container.update_idletasks()
+    
+    return slider
 
 
 def setup_drag_drop(source_label, target_label):

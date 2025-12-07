@@ -47,7 +47,7 @@ class TargetBrowserDialog(ctk.CTkToplevel):
         self.show_categories()
 
     def show_categories(self):
-        """Show categories"""
+        """Show categories - UPDATED FOR 4 CATEGORIES"""
         stop_all_animations()
         self.back_btn.pack_forget()
         for widget in self.container.winfo_children(): 
@@ -55,25 +55,39 @@ class TargetBrowserDialog(ctk.CTkToplevel):
         
         self.title_lbl.configure(text="Select Target Category")
         
+        # Update grid for 4 columns (2x2 layout)
         self.container.grid_columnconfigure(0, weight=1)
         self.container.grid_columnconfigure(1, weight=1)
-        self.container.grid_columnconfigure(2, weight=1)
         self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_rowconfigure(1, weight=1)
         
-        icons = {"Male": "👨", "Female": "👩", "Children": "👶"}
+        icons = {
+            "Male": "👨", 
+            "Female": "👩", 
+            "Children": "👶",
+            "Trending": "🔥"  # Fire emoji for trending
+        }
         
-        col = 0
-        for name, path in self.categories.items():
+        # Position buttons in 2x2 grid
+        positions = [
+            (0, 0),  # Male - top left
+            (0, 1),  # Female - top right
+            (1, 0),  # Children - bottom left
+            (1, 1)   # Trending - bottom right
+        ]
+        
+        for idx, (name, path) in enumerate(self.categories.items()):
+            row, col = positions[idx] if idx < len(positions) else (1, 1)
+            
             btn = ctk.CTkButton(self.container, 
-                               text=f"{name} {icons.get(name, '')}",
+                               text=f"{icons.get(name, '📁')} {name}",
                                font=("Segoe UI", 24, "bold"),
                                fg_color=COLOR_PINK, 
                                hover_color=COLOR_PINK_HOVER,
                                corner_radius=15,
                                width=300, height=200,
                                command=lambda p=path, n=name: self.display_files(p, n))
-            btn.grid(row=0, column=col, padx=30, pady=50)
-            col += 1
+            btn.grid(row=row, column=col, padx=30, pady=30, sticky="nsew")
 
     def display_files(self, targets_dir, category_name):
         """Display files - WITH ANIMATED GIF"""
@@ -82,7 +96,16 @@ class TargetBrowserDialog(ctk.CTkToplevel):
         for widget in self.container.winfo_children(): 
             widget.destroy()
         
-        self.title_lbl.configure(text=f"Select: {category_name} 👀")
+        # Update icon based on category
+        icons = {
+            "Male": "👨", 
+            "Female": "👩", 
+            "Children": "👶",
+            "Trending": "🔥"
+        }
+        icon = icons.get(category_name, "📁")
+        
+        self.title_lbl.configure(text=f"{icon} Select: {category_name}")
         
         scroll_frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         scroll_frame.pack(fill="both", expand=True)
@@ -95,7 +118,7 @@ class TargetBrowserDialog(ctk.CTkToplevel):
                     media_files.append(full)
         
         if not media_files:
-            ctk.CTkLabel(scroll_frame, text="No files found", 
+            ctk.CTkLabel(scroll_frame, text="No files found in this category", 
                         font=("Segoe UI", 14), text_color="#8b949e").pack(pady=50)
             return
         

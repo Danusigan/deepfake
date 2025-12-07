@@ -27,6 +27,10 @@ _output_label = None
 _qr_code_label = None
 _capture_btn = None
 
+# NEW: Store the actual Supabase URLs
+_last_supabase_image_url = None
+_last_supabase_qr_url = None
+
 RECENT_DIRECTORY_SOURCE = None
 RECENT_DIRECTORY_OUTPUT = None
 
@@ -35,7 +39,8 @@ TARGETS_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 CATEGORIES = {
     "Male": os.path.join(TARGETS_ROOT_DIR, 'Male'),
     "Female": os.path.join(TARGETS_ROOT_DIR, 'Female'), 
-    "Children": os.path.join(TARGETS_ROOT_DIR, 'Children')
+    "Children": os.path.join(TARGETS_ROOT_DIR, 'Children'),
+    "Trending": os.path.join(TARGETS_ROOT_DIR, 'Trending gif')
 }
 
 
@@ -296,6 +301,14 @@ def select_output_path(start_callback: Callable[[], None]):
         _root.after(delay, lambda: check_and_display_output(roop.globals.output_path))
 
 
+def store_supabase_urls(image_url: str, qr_url: str):
+    """Store Supabase URLs for QR generation"""
+    global _last_supabase_image_url, _last_supabase_qr_url
+    _last_supabase_image_url = image_url
+    _last_supabase_qr_url = qr_url
+    print(f"[DEBUG] Stored Supabase URLs: image={image_url}, qr={qr_url}")
+
+
 def check_and_display_output(path):
     """Display output - WITH ANIMATED GIF AND FULLSCREEN"""
     print(f"[DEBUG] check_and_display_output: {path}")
@@ -356,9 +369,9 @@ def check_and_display_output(path):
         if _root:
             _root.update()
         
-        # QR code
+        # QR code - NOW USES REAL SUPABASE URL
         if _root:
-            _root.after(400, lambda: generate_qr_for_output(path))
+            _root.after(400, lambda: generate_qr_for_output())
         
         print("[DEBUG] Output displayed")
         
@@ -400,15 +413,22 @@ def show_animated_output_preview(gif_path):
         traceback.print_exc()
 
 
-def generate_qr_for_output(path: str):
-    """Generate QR code"""
-    print(f"[DEBUG] Generating QR: {path}")
+def generate_qr_for_output():
+    """Generate QR code using REAL Supabase URL - BIGGER SIZE"""
+    global _last_supabase_image_url
+    
+    print(f"[DEBUG] Generating QR with URL: {_last_supabase_image_url}")
+    
     try:
-        if _qr_code_label:
-            qr_img = generate_qr_code(f"https://envlcgzlopkallmmtcaq.supabase.co/storage/v1/object/public/images/generated/{os.path.basename(path)}", (180, 180))
+        if _qr_code_label and _last_supabase_image_url:
+            # Use the REAL Supabase URL that was uploaded
+            # BIGGER QR CODE: 300x300 instead of 180x180
+            qr_img = generate_qr_code(_last_supabase_image_url, (300, 300))
             _qr_code_label.configure(image=qr_img, text="")
             _qr_code_label.image = qr_img
-            print("[DEBUG] QR generated")
+            print("[DEBUG] QR generated with real Supabase URL (300x300)")
+        else:
+            print(f"[DEBUG] Cannot generate QR: label={_qr_code_label}, url={_last_supabase_image_url}")
     except Exception as e:
         print(f"[ERROR] QR: {e}")
 
