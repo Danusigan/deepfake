@@ -183,15 +183,15 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     input_section.grid_columnconfigure(0, weight=1)
     input_section.grid_columnconfigure(1, weight=1)
 
-    # Source Card - BIGGER
-    source_card = create_premium_card(input_section, "SOURCE FACE", COLOR_CYAN, True, 400)
+    # Source Card - EXPANDED
+    source_card = create_premium_card(input_section, "SOURCE FACE", COLOR_CYAN, True, 550)
     source_card['frame'].grid(row=0, column=0, sticky="nsew", padx=(0, 15))
     _source_label = source_card['label']
     _camera_switch_var = source_card['camera_var']
     capture_btn = source_card['action_btn']
 
-    # Target Card - BIGGER
-    target_card = create_premium_card(input_section, "TARGET MEDIA", COLOR_PINK, False, 400)
+    # Target Card - EXPANDED
+    target_card = create_premium_card(input_section, "TARGET MEDIA", COLOR_PINK, False, 550)
     target_card['frame'].grid(row=0, column=1, sticky="nsew", padx=(15, 0))
     _target_label = target_card['label']
 
@@ -203,13 +203,13 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     output_section.grid_columnconfigure(0, weight=1)
     output_section.grid_columnconfigure(1, weight=1)
 
-    # Output Card - BIGGER & EQUAL
-    output_card = create_output_card(output_section, "OUTPUT RESULT", COLOR_GREEN)
+    # Output Card - EXPANDED & EQUAL
+    output_card = create_output_card(output_section, "OUTPUT RESULT", COLOR_GREEN, 550)
     output_card['frame'].grid(row=0, column=0, sticky="nsew", padx=(0, 15))
     output_label = output_card['label']
 
-    # QR Card - BIGGER & EQUAL SIZE
-    qr_card = create_qr_card(output_section)
+    # QR Card - EXPANDED & EQUAL SIZE
+    qr_card = create_qr_card(output_section, 550)
     qr_card['frame'].grid(row=0, column=1, sticky="nsew", padx=(15, 0))
     qr_code_label = qr_card['label']
 
@@ -381,7 +381,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     return ROOT
 
 
-def create_premium_card(parent, title, accent_color, has_camera, height=400):
+def create_premium_card(parent, title, accent_color, has_camera, height=550):
     """Create premium card with gradient accent"""
     card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
                        border_width=2, border_color=COLOR_BORDER, height=height)
@@ -424,10 +424,10 @@ def create_premium_card(parent, title, accent_color, has_camera, height=400):
                                 height=2, corner_radius=1)
     gradient_line.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
     
-    # Preview Area with glow effect
+    # Preview Area with glow effect - EXPANDED
     preview_container = ctk.CTkFrame(card, fg_color=COLOR_PREVIEW_BG, 
                                     corner_radius=15)
-    preview_container.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 15))
+    preview_container.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 15))
     preview_container.grid_columnconfigure(0, weight=1)
     preview_container.grid_rowconfigure(0, weight=1)
     
@@ -435,8 +435,8 @@ def create_premium_card(parent, title, accent_color, has_camera, height=400):
                                 text="DRAG & DROP\nOR CLICK HERE",
                                 fg_color="transparent",
                                 text_color=COLOR_TEXT_MUTED, 
-                                font=("Segoe UI", 12, "bold"))
-    preview_label.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+                                font=("Segoe UI", 11, "bold"))
+    preview_label.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
     
     # Action Button
     if has_camera:
@@ -450,14 +450,14 @@ def create_premium_card(parent, title, accent_color, has_camera, height=400):
         btn_state = "normal"
         btn_fg = accent_color
     
-    action_btn = ctk.CTkButton(card, text=btn_text, height=45,
+    action_btn = ctk.CTkButton(card, text=btn_text, height=40,
                               command=btn_cmd, state=btn_state,
                               fg_color=btn_fg, hover_color=accent_color,
                               text_color=COLOR_TEXT_PRIMARY,
-                              font=("Segoe UI", 13, "bold"),
+                              font=("Segoe UI", 12, "bold"),
                               corner_radius=12,
                               border_width=0)
-    action_btn.grid(row=2, column=0, sticky="ew", padx=30, pady=(0, 20))
+    action_btn.grid(row=2, column=0, sticky="ew", padx=15, pady=(0, 15))
     
     return {
         'frame': card,
@@ -467,17 +467,17 @@ def create_premium_card(parent, title, accent_color, has_camera, height=400):
     }
 
 
-def create_output_card(parent, title, accent_color):
-    """Create output preview card"""
+def create_output_card(parent, title, accent_color, height=550):
+    """Create output preview card - EXPANDED"""
     card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
-                       border_width=2, border_color=COLOR_BORDER, height=400)
+                       border_width=2, border_color=COLOR_BORDER, height=height)
     card.grid_columnconfigure(0, weight=1)
     card.grid_rowconfigure(1, weight=1)
     card.grid_propagate(False)
     
     # Header
     header = ctk.CTkFrame(card, fg_color="transparent")
-    header.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+    header.grid(row=0, column=0, sticky="ew", padx=20, pady=(15, 10))
     
     ctk.CTkLabel(header, text="●", font=("Segoe UI", 20), 
                 text_color=accent_color).pack(side="left", padx=(0, 8))
@@ -489,15 +489,15 @@ def create_output_card(parent, title, accent_color):
                                 fg_color=COLOR_PREVIEW_BG, corner_radius=15,
                                 text_color=COLOR_TEXT_MUTED, 
                                 font=("Segoe UI", 11))
-    preview_label.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+    preview_label.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 15))
     
     return {'frame': card, 'label': preview_label}
 
 
-def create_qr_card(parent):
-    """Create QR code card - SAME SIZE AS OUTPUT"""
+def create_qr_card(parent, height=550):
+    """Create QR code card - SAME SIZE AS OUTPUT (EXPANDED)"""
     card = ctk.CTkFrame(parent, fg_color=COLOR_CARD_BG, corner_radius=20,
-                       border_width=2, border_color=COLOR_BORDER, height=400)
+                       border_width=2, border_color=COLOR_BORDER, height=height)
     card.grid_columnconfigure(0, weight=1)
     card.grid_rowconfigure(0, weight=1)
     card.grid_propagate(False)
@@ -508,7 +508,7 @@ def create_qr_card(parent):
     
     # Icon header
     icon_frame = ctk.CTkFrame(content, fg_color="transparent")
-    icon_frame.pack(pady=(30, 15))
+    icon_frame.pack(pady=(20, 15))
     
     ctk.CTkLabel(icon_frame, text="📱", font=("Segoe UI", 32)).pack()
     
@@ -517,11 +517,11 @@ def create_qr_card(parent):
                 font=("Segoe UI", 14, "bold"), 
                 text_color=COLOR_PURPLE).pack(pady=(0, 15))
     
-    # QR Code - BIG SQUARE (300x300)
+    # QR Code - LARGER (380x380 to fit expanded card)
     qr_label = ctk.CTkLabel(content, text="QR Code\nWill Appear\nHere",
                            fg_color=COLOR_PREVIEW_BG, corner_radius=15,
                            text_color=COLOR_TEXT_MUTED, font=("Segoe UI", 10),
-                           width=300, height=300)
+                           width=380, height=380)
     qr_label.pack(pady=(0, 15))
     
     # Helper text

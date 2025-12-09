@@ -17,6 +17,7 @@ from roop.qr_generator import generate_qr_code
 from PIL import Image, ImageOps
 import cv2
 from .utils import create_animated_gif_preview, stop_all_animations
+from typing import Tuple
 
 # UI references
 _root = None
@@ -65,6 +66,84 @@ def update_status(text: str):
         _status_label.configure(text=text)
     if _root:
         _root.update_idletasks()
+
+
+def _get_label_preview_size(label) -> Tuple[int, int]:
+    """Return a comfortable preview size for a CTk label based on its widget size.
+
+    Falls back to sensible defaults if widget size not yet available.
+    """
+    try:
+        w = label.winfo_width()
+        h = label.winfo_height()
+        # If widget isn't rendered yet, width/height may be 1 or 0 -> use defaults
+        if w < 50 or h < 50:
+            return (640, 420)
+        # Give some padding room
+        return (max(50, w - 20), max(50, h - 20))
+    except Exception:
+        return (640, 420)
+
+
+def _set_image_on_label(label, image_path: str):
+    """Render an image to fit the given label and set it (contain mode).
+
+    Uses ImageOps.contain to avoid cropping and preserves aspect ratio.
+    """
+    if not label or not image_path:
+        return
+    try:
+        # If widget not yet laid out, retry shortly to let geometry settle
+        try_w = label.winfo_width()
+        try_h = label.winfo_height()
+        if try_w < 50 or try_h < 50:
+            # schedule a retry after layout
+            try:
+                label.after(80, lambda: _set_image_on_label(label, image_path))
+                return
+            except Exception:
+                pass
+
+        size = _get_label_preview_size(label)
+        img = Image.open(image_path)
+        img = ImageOps.contain(img.convert('RGB'), size, Image.LANCZOS)
+        preview = ctk.CTkImage(img, size=img.size)
+        label.configure(image=preview, text="")
+        label.image = preview
+    except Exception as e:
+        print(f"[ERROR] set_image_on_label: {e}")
+
+
+def _set_video_on_label(label, video_path: str):
+    """Render first frame of video to fit the label and set it."""
+    if not label or not video_path:
+        return
+    try:
+        # If widget not yet laid out, schedule a retry
+        try_w = label.winfo_width()
+        try_h = label.winfo_height()
+        if try_w < 50 or try_h < 50:
+            try:
+                label.after(80, lambda: _set_video_on_label(label, video_path))
+                return
+            except Exception:
+                pass
+
+        cap = cv2.VideoCapture(video_path)
+        ret, frame = cap.read()
+        cap.release()
+        if not ret:
+            return
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame_rgb)
+        size = _get_label_preview_size(label)
+        img = ImageOps.contain(img, size, Image.LANCZOS)
+        preview = ctk.CTkImage(img, size=img.size)
+        label.configure(image=preview, text="")
+        label.image = preview
+    except Exception as e:
+        print(f"[ERROR] set_video_on_label: {e}")
+
 
 
 def is_gif(path: str) -> bool:
@@ -127,9 +206,8 @@ def select_source_path(path: Optional[str] = None):
             roop.globals.source_path = path
             RECENT_DIRECTORY_SOURCE = os.path.dirname(path)
             
-            preview_img = render_image_preview_contain(path, (280, 180))
-            _source_label.configure(image=preview_img, text="")
-            _source_label.image = preview_img
+            # Set preview dynamically to fit the widget
+            _set_image_on_label(_source_label, path)
             
             _capture_btn.configure(text='📸 Capture Face')
             update_status(f"Source: {os.path.basename(path)}")
@@ -190,9 +268,8 @@ def handle_target_selection(path):
     try:
         if path and is_image(path):
             roop.globals.target_path = path
-            preview_img = render_image_preview_contain(path, (280, 180))
-            _target_label.configure(image=preview_img, text="")
-            _target_label.image = preview_img
+            # Set target preview to fit its widget
+            _set_image_on_label(_target_label, path)
             update_status(f"Target: {os.path.basename(path)}")
             print("[DEBUG] Target image set")
             
@@ -208,9 +285,8 @@ def handle_target_selection(path):
             
         elif path and is_video(path):
             roop.globals.target_path = path
-            preview_img = render_video_preview_contain(path, (280, 180))
-            _target_label.configure(image=preview_img, text="")
-            _target_label.image = preview_img
+            # Set target video preview (first frame) to fit widget
+            _set_video_on_label(_target_label, path)
             update_status(f"Target Video: {os.path.basename(path)}")
             print("[DEBUG] Target video set")
     
@@ -229,15 +305,14 @@ def show_animated_target_preview(gif_path):
     try:
         if _target_label and _root:
             print("[DEBUG] Creating animated GIF preview for target...")
-            success = create_animated_gif_preview(gif_path, (280, 180), _target_label, _root)
+            size = _get_label_preview_size(_target_label)
+            success = create_animated_gif_preview(gif_path, size, _target_label, _root)
             if success:
                 update_status(f"✅ GIF playing: {os.path.basename(gif_path)}")
                 print("[DEBUG] ✅ Target GIF animation started successfully!")
             else:
                 print("[DEBUG] ❌ GIF animation failed, using static fallback")
-                preview_img = render_image_preview_contain(gif_path, (280, 180))
-                _target_label.configure(image=preview_img, text="")
-                _target_label.image = preview_img
+                _set_image_on_label(_target_label, gif_path)
                 update_status(f"GIF: {os.path.basename(gif_path)}")
         else:
             print(f"[DEBUG] ❌ Cannot animate: _target_label={_target_label}, _root={_root}")
@@ -346,20 +421,17 @@ def check_and_display_output(path):
                 _root.after(400, lambda: _show_fullscreen_output(path))
         elif is_video(path):
             print("[DEBUG] Displaying video")
-            prev = render_video_preview_contain(path, (350, 200))
-            if _output_label and prev:
-                _output_label.configure(image=prev, text="")
-                _output_label.image = prev
+            # Render to the output label dynamically so it fits the widget
+            if _output_label:
+                _set_video_on_label(_output_label, path)
             update_status("✅ Video complete!")
             # Show fullscreen video
             if _root:
                 _root.after(500, lambda: _show_fullscreen_output(path))
         elif is_image(path):
             print("[DEBUG] Displaying image")
-            prev = render_image_preview_contain(path, (350, 200))
-            if _output_label and prev:
-                _output_label.configure(image=prev, text="")
-                _output_label.image = prev
+            if _output_label:
+                _set_image_on_label(_output_label, path)
             update_status("✅ Image complete!")
             # Show fullscreen image
             if _root:
@@ -398,15 +470,14 @@ def show_animated_output_preview(gif_path):
     print(f"[DEBUG] show_animated_output_preview: {gif_path}")
     try:
         if _output_label and _root:
-            success = create_animated_gif_preview(gif_path, (350, 200), _output_label, _root)
+            size = _get_label_preview_size(_output_label)
+            success = create_animated_gif_preview(gif_path, size, _output_label, _root)
             if success:
                 update_status(f"✅ GIF playing!")
                 print("[DEBUG] Output GIF animation started")
             else:
                 print("[DEBUG] Animation failed")
-                prev = render_image_preview_contain(gif_path, (350, 200))
-                _output_label.configure(image=prev, text="")
-                _output_label.image = prev
+                _set_image_on_label(_output_label, gif_path)
     except Exception as e:
         print(f"[ERROR] Output GIF: {e}")
         import traceback

@@ -17,6 +17,55 @@ FULLSCREEN_WINDOW = None
 ANIMATION_STOP_FLAG = False
 
 
+def _toggle_fullscreen(event=None):
+    """Toggle fullscreen state for the current fullscreen window."""
+    global FULLSCREEN_WINDOW
+    try:
+        if not FULLSCREEN_WINDOW:
+            return
+        current = bool(FULLSCREEN_WINDOW.attributes('-fullscreen'))
+        FULLSCREEN_WINDOW.attributes('-fullscreen', not current)
+        # When leaving fullscreen, ensure window can be maximized
+        if current:
+            # left fullscreen -> restore geometry to full screen size
+            w = FULLSCREEN_WINDOW.winfo_screenwidth()
+            h = FULLSCREEN_WINDOW.winfo_screenheight()
+            FULLSCREEN_WINDOW.geometry(f"{w}x{h}+0+0")
+        FULLSCREEN_WINDOW.focus_force()
+    except Exception:
+        pass
+
+
+def _minimize_fullscreen(event=None):
+    """Minimize (iconify) the fullscreen window."""
+    global FULLSCREEN_WINDOW
+    try:
+        if FULLSCREEN_WINDOW:
+            FULLSCREEN_WINDOW.iconify()
+    except Exception:
+        pass
+
+
+def _maximize_fullscreen(event=None):
+    """Maximize the fullscreen window (Windows 'zoomed' state).
+
+    Falls back to setting geometry to screen size if 'zoomed' not supported.
+    """
+    global FULLSCREEN_WINDOW
+    try:
+        if not FULLSCREEN_WINDOW:
+            return
+        try:
+            FULLSCREEN_WINDOW.state('zoomed')
+        except Exception:
+            w = FULLSCREEN_WINDOW.winfo_screenwidth()
+            h = FULLSCREEN_WINDOW.winfo_screenheight()
+            FULLSCREEN_WINDOW.geometry(f"{w}x{h}+0+0")
+        FULLSCREEN_WINDOW.focus_force()
+    except Exception:
+        pass
+
+
 def show_output_fullscreen(file_path: str, parent_root=None):
     """
     Display output image/video/gif in fullscreen window.
@@ -27,8 +76,14 @@ def show_output_fullscreen(file_path: str, parent_root=None):
     (this avoids creating multiple independent `Tk()` roots which can cause
     PhotoImage issues). The window is forced to render before PhotoImage is
     created to prevent the "pyimageX doesn't exist" error.
+    
+    Only one fullscreen window is shown at a time. If a window already exists,
+    it will be closed before displaying the new content.
     """
     global FULLSCREEN_WINDOW, ANIMATION_STOP_FLAG
+
+    # Close any existing fullscreen window
+    close_fullscreen()
 
     # Resolve to absolute path
     try:
@@ -53,17 +108,87 @@ def show_output_fullscreen(file_path: str, parent_root=None):
         else:
             window = tk.Tk()
 
+        # Set fullscreen mode
         window.attributes('-fullscreen', True)
         window.configure(bg='#000000')
+        
+        # Get screen dimensions and set window geometry explicitly
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+        window.geometry(f'{screen_width}x{screen_height}+0+0')
+        
+        # Remove window decorations
+        window.attributes('-topmost', True)
         window.focus_force()
 
         # store main reference before creating widgets so helpers can use it
         FULLSCREEN_WINDOW = window
+        # Ensure window is transient to parent (if any) and not 'grabbing' input
+        try:
+            if parent_root:
+                window.transient(parent_root)
+            # Ensure no grab is active that would block events
+            try:
+                window.grab_release()
+            except Exception:
+                pass
+        except Exception:
+            pass
 
         # Ensure window is present before creating PhotoImage
         window.update_idletasks()
         window.update()
 
+        # --- Add simple control bar (close / minimize / maximize / toggle fullscreen)
+        try:
+            control_frame = tk.Frame(window, bg='#000000', highlightthickness=0)
+
+            btn_close = tk.Button(
+                control_frame, text='✕', command=close_fullscreen,
+                bg='#000000', fg='#ffffff', bd=0, activebackground='#333333',
+                font=('Arial', 12, 'bold')
+            )
+            btn_min = tk.Button(
+                control_frame, text='▁', command=_minimize_fullscreen,
+                bg='#000000', fg='#ffffff', bd=0, activebackground='#333333',
+                font=('Arial', 12, 'bold')
+            )
+            btn_max = tk.Button(
+                control_frame, text='⬜', command=_maximize_fullscreen,
+                bg='#000000', fg='#ffffff', bd=0, activebackground='#333333',
+                font=('Arial', 12, 'bold')
+            )
+            btn_toggle = tk.Button(
+                control_frame, text='▢', command=_toggle_fullscreen,
+                bg='#000000', fg='#ffffff', bd=0, activebackground='#333333',
+                font=('Arial', 12, 'bold')
+            )
+
+            # Pack buttons right-to-left so close appears at far right
+            btn_close.pack(side=tk.RIGHT, padx=4, pady=2)
+            btn_toggle.pack(side=tk.RIGHT, padx=4, pady=2)
+            btn_max.pack(side=tk.RIGHT, padx=4, pady=2)
+            btn_min.pack(side=tk.RIGHT, padx=4, pady=2)
+
+            # Place control frame at top-right
+            control_frame.place(relx=1.0, rely=0.0, anchor=tk.NE, x=-10, y=10)
+
+            # Keyboard bindings for convenience (bind globally so keys work)
+            window.bind_all('<Escape>', lambda e: close_fullscreen())
+            window.bind_all('q', lambda e: close_fullscreen())
+            window.bind_all('<F11>', lambda e: _toggle_fullscreen())
+            window.bind_all('f', lambda e: _toggle_fullscreen())
+            window.bind_all('m', lambda e: _minimize_fullscreen())
+            window.bind_all('M', lambda e: _maximize_fullscreen())
+
+            # Handle window close (window manager) via protocol
+            try:
+                window.protocol('WM_DELETE_WINDOW', close_fullscreen)
+            except Exception:
+                pass
+        except Exception:
+            # Non-critical: if control creation fails, continue showing content
+            pass
         # Display content
         if resolved.lower().endswith('.gif'):
             _show_gif_fullscreen(resolved)
@@ -126,21 +251,23 @@ def _show_image_fullscreen(file_path: str):
         photo = ImageTk.PhotoImage(img)
         print(f"[DEBUG] PhotoImage created")
         
-        # Create label for image
-        label = tk.Label(FULLSCREEN_WINDOW, image=photo, bg='#000000')
+        # Create label for image using place() for full screen control
+        label = tk.Label(FULLSCREEN_WINDOW, image=photo, bg='#000000', highlightthickness=0, bd=0)
         label.image = photo  # Keep reference to prevent garbage collection
-        label.pack(fill=tk.BOTH, expand=True)
-        print("[DEBUG] Image label packed")
+        label.place(x=0, y=0, relwidth=1, relheight=1)
+        print("[DEBUG] Image label placed fullscreen")
         
-        # Add instructions at bottom
+        # Add instructions at bottom-right corner
         instructions = tk.Label(
             FULLSCREEN_WINDOW,
             text="Press ESC or Q to close",
             bg='#000000',
             fg='#888888',
-            font=('Arial', 12)
+            font=('Arial', 10),
+            highlightthickness=0,
+            bd=0
         )
-        instructions.pack(side=tk.BOTTOM, pady=20)
+        instructions.place(relx=1, rely=1, anchor=tk.SE, x=-10, y=-10)
         
         # Store reference in window
         FULLSCREEN_WINDOW.current_image = photo
@@ -174,19 +301,21 @@ def _show_video_fullscreen(file_path: str):
             fps = 30
         frame_delay = int(1000 / fps)
         
-        # Create label for video
-        video_label = tk.Label(FULLSCREEN_WINDOW, bg='#000000')
-        video_label.pack(fill=tk.BOTH, expand=True)
+        # Create label for video using place() for full screen control
+        video_label = tk.Label(FULLSCREEN_WINDOW, bg='#000000', highlightthickness=0, bd=0)
+        video_label.place(x=0, y=0, relwidth=1, relheight=1)
         
-        # Add instructions
+        # Add instructions at bottom-right corner
         instructions = tk.Label(
             FULLSCREEN_WINDOW,
             text="Press ESC or Q to close",
             bg='#000000',
             fg='#888888',
-            font=('Arial', 12)
+            font=('Arial', 10),
+            highlightthickness=0,
+            bd=0
         )
-        instructions.pack(side=tk.BOTTOM, pady=20)
+        instructions.place(relx=1, rely=1, anchor=tk.SE, x=-10, y=-10)
         
         # Store video state
         video_state = {
@@ -297,19 +426,21 @@ def _show_gif_fullscreen(file_path: str):
         
         print(f"[DEBUG] Loaded {len(frames)} GIF frames")
         
-        # Create label for GIF
-        gif_label = tk.Label(FULLSCREEN_WINDOW, bg='#000000')
-        gif_label.pack(fill=tk.BOTH, expand=True)
+        # Create label for GIF using place() for full screen control
+        gif_label = tk.Label(FULLSCREEN_WINDOW, bg='#000000', highlightthickness=0, bd=0)
+        gif_label.place(x=0, y=0, relwidth=1, relheight=1)
         
-        # Add instructions
+        # Add instructions at bottom-right corner
         instructions = tk.Label(
             FULLSCREEN_WINDOW,
             text="Press ESC or Q to close",
             bg='#000000',
             fg='#888888',
-            font=('Arial', 12)
+            font=('Arial', 10),
+            highlightthickness=0,
+            bd=0
         )
-        instructions.pack(side=tk.BOTTOM, pady=20)
+        instructions.place(relx=1, rely=1, anchor=tk.SE, x=-10, y=-10)
         
         # Store GIF state
         gif_state = {
@@ -369,18 +500,22 @@ def _show_error_message(message: str):
             bg='#000000',
             fg='#ff0055',
             font=('Arial', 20),
-            wraplength=800
+            wraplength=800,
+            highlightthickness=0,
+            bd=0
         )
-        error_label.pack(expand=True)
+        error_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
         
         instructions = tk.Label(
             FULLSCREEN_WINDOW,
             text="Press ESC or Q to close",
             bg='#000000',
             fg='#888888',
-            font=('Arial', 12)
+            font=('Arial', 10),
+            highlightthickness=0,
+            bd=0
         )
-        instructions.pack(side=tk.BOTTOM, pady=20)
+        instructions.place(relx=1, rely=1, anchor=tk.SE, x=-10, y=-10)
         
     except Exception as e:
         print(f"[ERROR] Error message display: {e}")
@@ -397,6 +532,17 @@ def close_fullscreen():
     
     if FULLSCREEN_WINDOW:
         try:
+            # Unbind any global bindings we added to avoid leaving stale handlers
+            try:
+                FULLSCREEN_WINDOW.unbind_all('<Escape>')
+                FULLSCREEN_WINDOW.unbind_all('q')
+                FULLSCREEN_WINDOW.unbind_all('<F11>')
+                FULLSCREEN_WINDOW.unbind_all('f')
+                FULLSCREEN_WINDOW.unbind_all('m')
+                FULLSCREEN_WINDOW.unbind_all('M')
+            except Exception:
+                pass
+
             FULLSCREEN_WINDOW.destroy()
         except:
             pass

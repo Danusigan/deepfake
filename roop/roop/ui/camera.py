@@ -391,15 +391,27 @@ def camera_feed_tick():
         if frame is not None and frame.size > 0:
             # Store for capture
             CAM_FRAME_DATA = frame.copy()
-            
-            # Process for display
+
+            # Process for display: use CONTAIN to preserve whole image (no cropping)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(rgb)
-            pil_img = ImageOps.fit(pil_img, (300, 220), Image.LANCZOS)
-            
-            CAM_CURRENT_IMAGE = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, 
-                                            size=(300, 220))
-            
+
+            # Try to get label size for a good fit, fallback to sensible defaults
+            try:
+                lw = _source_label.winfo_width()
+                lh = _source_label.winfo_height()
+                if lw < 50 or lh < 50:
+                    size = (500, 420)
+                else:
+                    size = (max(50, lw - 20), max(50, lh - 20))
+            except Exception:
+                size = (500, 420)
+
+            pil_img = ImageOps.contain(pil_img, size, Image.LANCZOS)
+
+            CAM_CURRENT_IMAGE = ctk.CTkImage(light_image=pil_img, dark_image=pil_img,
+                                            size=pil_img.size)
+
             try:
                 _source_label.configure(image=CAM_CURRENT_IMAGE, text="")
                 _source_label.image = CAM_CURRENT_IMAGE
@@ -417,7 +429,7 @@ def camera_feed_tick():
 def do_capture():
     """Capture current frame"""
     from .file_handlers import update_status
-    from .utils import render_image_preview
+    from .file_handlers import _set_image_on_label
     from .pipeline import pipeline_process
     global CAM_FRAME_DATA
     
@@ -431,10 +443,21 @@ def do_capture():
     try:
         cv2.imwrite(path, CAM_FRAME_DATA)
         roop.globals.source_path = path
-        
-        preview = render_image_preview(path, (300, 220))
-        _source_label.configure(image=preview, text="")
-        _source_label.image = preview
+
+        # Use the centralized helper that fits the image into the source label
+        try:
+            _set_image_on_label(_source_label, path)
+        except Exception:
+            # Fallback: set a simple preview
+            try:
+                from PIL import Image
+                img = Image.open(path)
+                img = ImageOps.contain(img.convert('RGB'), (300, 220), Image.LANCZOS)
+                preview = ctk.CTkImage(img, size=img.size)
+                _source_label.configure(image=preview, text="")
+                _source_label.image = preview
+            except Exception as e:
+                print(f"Capture preview fallback error: {e}")
         
         if roop.globals.PIPELINE_ENABLED:
             _capture_btn.configure(state='disabled', text='⚡ Processing...', fg_color="#666")

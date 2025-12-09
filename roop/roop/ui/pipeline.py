@@ -74,8 +74,7 @@ def handle_pipeline_toggle():
 
 def handle_pipeline_target_selection(path):
     """Handle target selection for pipeline"""
-    from .file_handlers import update_status
-    from .utils import render_image_preview, render_video_preview
+    from .file_handlers import update_status, _set_image_on_label, _set_video_on_label
     from .main_window import get_target_label
     from roop.utilities import is_image, is_video
     
@@ -85,9 +84,11 @@ def handle_pipeline_target_selection(path):
     target_label = get_target_label()
     if target_label:
         if is_image(path):
-            target_label.configure(image=render_image_preview(path, (280, 180)), text="")
+            # Use centralized helper to fit image into the target label (contain mode)
+            _set_image_on_label(target_label, path)
         elif is_video(path):
-            target_label.configure(image=render_video_preview(path, (280, 180)), text="")
+            # Use centralized helper to set a video frame preview
+            _set_video_on_label(target_label, path)
     
     update_status(f"✓ Pipeline target set: {os.path.basename(path)}")
     
