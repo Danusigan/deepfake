@@ -324,6 +324,35 @@ def start() -> None:
             if os.path.exists(roop.globals.output_path):
                 print(f"[DEBUG] GIF output created: {roop.globals.output_path}")
                 update_status('✅ GIF processing complete!')
+                
+                # CRITICAL: Upload GIF to Supabase and generate QR
+                try:
+                    with open(roop.globals.output_path, 'rb') as f:
+                        gif_bytes = f.read()
+                    upload_result = upload_image_and_generate_qr(gif_bytes, os.path.basename(roop.globals.output_path))
+                    update_status(f'✅ GIF uploaded to Supabase!')
+                    update_status(f'🎞️ GIF URL: {upload_result["url"]}')
+                    update_status(f'🔗 QR URL: {upload_result["qr_url"]}')
+                    
+                    # Store URLs for UI QR generation
+                    if ui and hasattr(ui, 'file_handlers'):
+                        ui.file_handlers.store_supabase_urls(upload_result["url"], upload_result["qr_url"])
+                    
+                    # Save QR code locally
+                    qr_local_path = roop.globals.output_path.replace('.gif', '_qr.png')
+                    try:
+                        qr_bytes = requests.get(upload_result["qr_url"]).content
+                        with open(qr_local_path, 'wb') as f:
+                            f.write(qr_bytes)
+                        update_status(f'💾 QR code saved to: {qr_local_path}')
+                    except Exception as qr_err:
+                        update_status(f'⚠️ Could not download QR: {qr_err}')
+                    
+                except Exception as e:
+                    update_status(f'❌ Supabase upload failed: {e}')
+                    import traceback
+                    traceback.print_exc()
+                
                 if ui:
                     print("[DEBUG] Calling ui.check_and_display_output for GIF")
                     ui.check_and_display_output(roop.globals.output_path)

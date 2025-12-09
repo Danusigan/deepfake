@@ -120,23 +120,22 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
                             padx=8, pady=2)
     pro_badge.pack(side="left", padx=(8, 0))
 
-    # Status (Center) with Glow Effect
-    status_outer = ctk.CTkFrame(header_frame, fg_color="transparent")
-    status_outer.grid(row=0, column=1)
-    
-    status_container = ctk.CTkFrame(status_outer, fg_color="#1a1f2e", corner_radius=20, 
-                                   border_width=1, border_color=COLOR_GREEN)
-    status_container.pack()
+    # Status (Center) with Glow Effect - SIMPLIFIED
+    status_container = ctk.CTkFrame(header_frame, fg_color="#1a1f2e", corner_radius=20, 
+                                   border_width=1, border_color=COLOR_GREEN,
+                                   height=36)
+    status_container.grid(row=0, column=1)
+    status_container.grid_propagate(False)
     
     status_inner = ctk.CTkFrame(status_container, fg_color="transparent")
-    status_inner.pack(padx=15, pady=8)
+    status_inner.pack(padx=20, pady=0, expand=True)
     
-    status_icon = ctk.CTkLabel(status_inner, text="●", font=("Segoe UI", 16), 
+    status_icon = ctk.CTkLabel(status_inner, text="●", font=("Segoe UI", 14), 
                               text_color=COLOR_GREEN)
     status_icon.pack(side="left", padx=(0, 8))
     
     status_label = ctk.CTkLabel(status_inner, text="Ready to Process", 
-                                font=("Segoe UI", 13, "bold"), 
+                                font=("Segoe UI", 12, "bold"), 
                                 text_color=COLOR_TEXT_PRIMARY)
     status_label.pack(side="left")
 
@@ -247,52 +246,224 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     left_col = ctk.CTkFrame(settings_grid, fg_color="transparent")
     left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 15))
 
-    # General Settings Panel
-    general_panel = create_settings_panel(left_col, "⚙️ GENERAL", COLOR_CYAN)
-    general_panel.pack(fill="x", pady=(0, 20))
+    # ===== GENERAL SETTINGS PANEL =====
+    general_panel_container = ctk.CTkFrame(left_col, fg_color="#1a1f2e", corner_radius=15,
+                                          border_width=1, border_color=COLOR_BORDER)
+    general_panel_container.pack(fill="x", pady=(0, 20))
+    
+    # Header
+    gen_header = ctk.CTkFrame(general_panel_container, fg_color="transparent")
+    gen_header.pack(fill="x", padx=20, pady=(15, 10))
+    
+    ctk.CTkLabel(gen_header, text="● ⚙️ GENERAL", font=("Segoe UI", 12, "bold"), 
+                text_color=COLOR_CYAN).pack(side="left")
+    
+    ctk.CTkFrame(gen_header, fg_color=COLOR_CYAN, height=2).pack(fill="x", pady=(8, 0))
+    
+    # Content
+    gen_content = ctk.CTkFrame(general_panel_container, fg_color="transparent")
+    gen_content.pack(fill="x", padx=20, pady=(0, 15))
     
     _many_faces_var = ctk.BooleanVar(value=roop.globals.many_faces)
-    create_checkbox(general_panel, "Process All Faces in Frame", _many_faces_var, COLOR_CYAN,
-                   lambda: setattr(roop.globals, 'many_faces', _many_faces_var.get()))
+    ctk.CTkCheckBox(gen_content, text="Process All Faces in Frame", 
+                   variable=_many_faces_var,
+                   command=lambda: setattr(roop.globals, 'many_faces', _many_faces_var.get()),
+                   font=("Segoe UI", 11), fg_color=COLOR_CYAN, 
+                   hover_color=COLOR_CYAN_HOVER,
+                   border_width=2, text_color=COLOR_TEXT_SECONDARY).pack(anchor="w", pady=6)
     
     _keep_frames_var = ctk.BooleanVar(value=roop.globals.keep_frames)
-    create_checkbox(general_panel, "Keep Temporary Frames", _keep_frames_var, COLOR_PURPLE,
-                   lambda: setattr(roop.globals, 'keep_frames', _keep_frames_var.get()))
+    ctk.CTkCheckBox(gen_content, text="Keep Temporary Frames", 
+                   variable=_keep_frames_var,
+                   command=lambda: setattr(roop.globals, 'keep_frames', _keep_frames_var.get()),
+                   font=("Segoe UI", 11), fg_color=COLOR_PURPLE, 
+                   hover_color=COLOR_PURPLE_HOVER,
+                   border_width=2, text_color=COLOR_TEXT_SECONDARY).pack(anchor="w", pady=6)
 
-    # Face Quality Panel
-    face_panel = create_settings_panel(left_col, "👤 FACE QUALITY", COLOR_PINK)
-    face_panel.pack(fill="x", pady=(0, 20))
+    # ===== FACE QUALITY PANEL =====
+    face_panel_container = ctk.CTkFrame(left_col, fg_color="#1a1f2e", corner_radius=15,
+                                       border_width=1, border_color=COLOR_BORDER)
+    face_panel_container.pack(fill="x", pady=(0, 20))
     
-    create_slider(face_panel, "Face Mask Blur (Edge Smoothness)", 1, 50, 15, COLOR_PINK, 
-                 lambda v: setattr(roop.globals, 'FACE_MASK_BLUR', int(v)))
+    # Header
+    face_header = ctk.CTkFrame(face_panel_container, fg_color="transparent")
+    face_header.pack(fill="x", padx=20, pady=(15, 10))
     
-    create_slider(face_panel, "Face Mask Padding (Coverage Area)", 0.0, 1.0, 0.35, COLOR_PINK,
-                 lambda v: setattr(roop.globals, 'FACE_MASK_PADDING', float(v)), is_float=True)
+    ctk.CTkLabel(face_header, text="● 👤 FACE QUALITY", font=("Segoe UI", 12, "bold"), 
+                text_color=COLOR_PINK).pack(side="left")
     
-    create_slider(face_panel, "Blend Ratio (Swap Strength)", 0.0, 1.0, 0.98, COLOR_PINK,
-                 lambda v: setattr(roop.globals, 'BLEND_RATIO', float(v)), is_float=True)
+    ctk.CTkFrame(face_header, fg_color=COLOR_PINK, height=2).pack(fill="x", pady=(8, 0))
     
-    create_slider(face_panel, "Face Detection Confidence", 0.1, 1.0, 0.6, COLOR_PINK,
-                 lambda v: setattr(roop.globals, 'FACE_DETECTION_CONFIDENCE', float(v)), is_float=True)
+    # Content
+    face_content = ctk.CTkFrame(face_panel_container, fg_color="transparent")
+    face_content.pack(fill="x", padx=20, pady=(0, 15))
+    
+    # Mask Blur Slider
+    blur_frame = ctk.CTkFrame(face_content, fg_color="transparent")
+    blur_frame.pack(fill="x", pady=8)
+    
+    blur_top = ctk.CTkFrame(blur_frame, fg_color="transparent")
+    blur_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(blur_top, text="Face Mask Blur", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    blur_val_lbl = ctk.CTkLabel(blur_top, text="15", font=("Segoe UI", 10, "bold"), 
+                               text_color=COLOR_TEXT_PRIMARY)
+    blur_val_lbl.pack(side="right")
+    
+    blur_slider = ctk.CTkSlider(blur_frame, from_=1, to=50, number_of_steps=49,
+                               button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_PINK,
+                               height=16)
+    blur_slider.set(15)
+    blur_slider.pack(fill="x")
+    blur_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'FACE_MASK_BLUR', int(v)),
+        blur_val_lbl.configure(text=str(int(v)))
+    ))
+    
+    # Mask Padding Slider
+    pad_frame = ctk.CTkFrame(face_content, fg_color="transparent")
+    pad_frame.pack(fill="x", pady=8)
+    
+    pad_top = ctk.CTkFrame(pad_frame, fg_color="transparent")
+    pad_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(pad_top, text="Face Mask Padding", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    pad_val_lbl = ctk.CTkLabel(pad_top, text="0.35", font=("Segoe UI", 10, "bold"), 
+                              text_color=COLOR_TEXT_PRIMARY)
+    pad_val_lbl.pack(side="right")
+    
+    pad_slider = ctk.CTkSlider(pad_frame, from_=0.0, to=1.0, number_of_steps=100,
+                              button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_PINK,
+                              height=16)
+    pad_slider.set(0.35)
+    pad_slider.pack(fill="x")
+    pad_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'FACE_MASK_PADDING', float(v)),
+        pad_val_lbl.configure(text=f"{float(v):.2f}")
+    ))
+    
+    # Blend Ratio Slider
+    blend_frame = ctk.CTkFrame(face_content, fg_color="transparent")
+    blend_frame.pack(fill="x", pady=8)
+    
+    blend_top = ctk.CTkFrame(blend_frame, fg_color="transparent")
+    blend_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(blend_top, text="Blend Ratio", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    blend_val_lbl = ctk.CTkLabel(blend_top, text="0.98", font=("Segoe UI", 10, "bold"), 
+                                text_color=COLOR_TEXT_PRIMARY)
+    blend_val_lbl.pack(side="right")
+    
+    blend_slider = ctk.CTkSlider(blend_frame, from_=0.0, to=1.0, number_of_steps=100,
+                                button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_PINK,
+                                height=16)
+    blend_slider.set(0.98)
+    blend_slider.pack(fill="x")
+    blend_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'BLEND_RATIO', float(v)),
+        blend_val_lbl.configure(text=f"{float(v):.2f}")
+    ))
+    
+    # Detection Confidence Slider
+    det_frame = ctk.CTkFrame(face_content, fg_color="transparent")
+    det_frame.pack(fill="x", pady=8)
+    
+    det_top = ctk.CTkFrame(det_frame, fg_color="transparent")
+    det_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(det_top, text="Detection Confidence", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    det_val_lbl = ctk.CTkLabel(det_top, text="0.60", font=("Segoe UI", 10, "bold"), 
+                              text_color=COLOR_TEXT_PRIMARY)
+    det_val_lbl.pack(side="right")
+    
+    det_slider = ctk.CTkSlider(det_frame, from_=0.1, to=1.0, number_of_steps=90,
+                              button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_PINK,
+                              height=16)
+    det_slider.set(0.6)
+    det_slider.pack(fill="x")
+    det_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'FACE_DETECTION_CONFIDENCE', float(v)),
+        det_val_lbl.configure(text=f"{float(v):.2f}")
+    ))
 
-    # Video Settings Panel
-    video_panel = create_settings_panel(left_col, "🎬 VIDEO", COLOR_GREEN)
-    video_panel.pack(fill="x")
+    # ===== VIDEO PANEL =====
+    video_panel_container = ctk.CTkFrame(left_col, fg_color="#1a1f2e", corner_radius=15,
+                                        border_width=1, border_color=COLOR_BORDER)
+    video_panel_container.pack(fill="x")
+    
+    # Header
+    vid_header = ctk.CTkFrame(video_panel_container, fg_color="transparent")
+    vid_header.pack(fill="x", padx=20, pady=(15, 10))
+    
+    ctk.CTkLabel(vid_header, text="● 🎬 VIDEO", font=("Segoe UI", 12, "bold"), 
+                text_color=COLOR_GREEN).pack(side="left")
+    
+    ctk.CTkFrame(vid_header, fg_color=COLOR_GREEN, height=2).pack(fill="x", pady=(8, 0))
+    
+    # Content
+    vid_content = ctk.CTkFrame(video_panel_container, fg_color="transparent")
+    vid_content.pack(fill="x", padx=20, pady=(0, 15))
     
     _keep_fps_var = ctk.BooleanVar(value=True)
     roop.globals.keep_fps = True
-    create_checkbox(video_panel, "Keep Original FPS", _keep_fps_var, COLOR_GREEN,
-                   lambda: setattr(roop.globals, 'keep_fps', _keep_fps_var.get()))
+    ctk.CTkCheckBox(vid_content, text="Keep Original FPS", 
+                   variable=_keep_fps_var,
+                   command=lambda: setattr(roop.globals, 'keep_fps', _keep_fps_var.get()),
+                   font=("Segoe UI", 11), fg_color=COLOR_GREEN, 
+                   hover_color=COLOR_GREEN_HOVER,
+                   border_width=2, text_color=COLOR_TEXT_SECONDARY).pack(anchor="w", pady=6)
     
     _skip_audio_var = ctk.BooleanVar(value=False)
-    create_checkbox(video_panel, "Remove Audio Track", _skip_audio_var, COLOR_ORANGE,
-                   lambda: setattr(roop.globals, 'skip_audio', _skip_audio_var.get()))
+    ctk.CTkCheckBox(vid_content, text="Remove Audio Track", 
+                   variable=_skip_audio_var,
+                   command=lambda: setattr(roop.globals, 'skip_audio', _skip_audio_var.get()),
+                   font=("Segoe UI", 11), fg_color=COLOR_ORANGE, 
+                   hover_color="#e55a25",
+                   border_width=2, text_color=COLOR_TEXT_SECONDARY).pack(anchor="w", pady=6)
     
-    create_slider(video_panel, "Video Output Quality (Lower = Better)", 0, 100, 35, COLOR_GREEN,
-                 lambda v: setattr(roop.globals, 'output_video_quality', int(v)))
+    # Video Quality Slider
+    vq_frame = ctk.CTkFrame(vid_content, fg_color="transparent")
+    vq_frame.pack(fill="x", pady=8)
     
-    create_slider(video_panel, "Video Max Resolution", 480, 1920, 1080, COLOR_GREEN,
-                 lambda v: setattr(roop.globals, 'VIDEO_MAX_SIZE', int(v)))
+    vq_top = ctk.CTkFrame(vq_frame, fg_color="transparent")
+    vq_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(vq_top, text="Video Quality (Lower=Better)", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    vq_val_lbl = ctk.CTkLabel(vq_top, text="35", font=("Segoe UI", 10, "bold"), 
+                             text_color=COLOR_TEXT_PRIMARY)
+    vq_val_lbl.pack(side="right")
+    
+    vq_slider = ctk.CTkSlider(vq_frame, from_=0, to=100, number_of_steps=100,
+                             button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_GREEN,
+                             height=16)
+    vq_slider.set(35)
+    vq_slider.pack(fill="x")
+    vq_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'output_video_quality', int(v)),
+        vq_val_lbl.configure(text=str(int(v)))
+    ))
+    
+    # Video Resolution Slider
+    vr_frame = ctk.CTkFrame(vid_content, fg_color="transparent")
+    vr_frame.pack(fill="x", pady=8)
+    
+    vr_top = ctk.CTkFrame(vr_frame, fg_color="transparent")
+    vr_top.pack(fill="x", pady=(0, 5))
+    ctk.CTkLabel(vr_top, text="Max Resolution", font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    vr_val_lbl = ctk.CTkLabel(vr_top, text="1080", font=("Segoe UI", 10, "bold"), 
+                             text_color=COLOR_TEXT_PRIMARY)
+    vr_val_lbl.pack(side="right")
+    
+    vr_slider = ctk.CTkSlider(vr_frame, from_=480, to=1920, number_of_steps=144,
+                             button_color=COLOR_TEXT_PRIMARY, progress_color=COLOR_GREEN,
+                             height=16)
+    vr_slider.set(1080)
+    vr_slider.pack(fill="x")
+    vr_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'VIDEO_MAX_SIZE', int(v)),
+        vr_val_lbl.configure(text=str(int(v)))
+    ))
 
     # RIGHT COLUMN
     right_col = ctk.CTkFrame(settings_grid, fg_color="transparent")
@@ -302,46 +473,223 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     gif_panel = create_settings_panel(right_col, "🎞️ GIF PROCESSING", COLOR_PURPLE)
     gif_panel.pack(fill="x", pady=(0, 20))
     
-    create_slider(gif_panel, "GIF Output Quality", 50, 100, 92, COLOR_PURPLE,
-                 lambda v: setattr(roop.globals, 'GIF_QUALITY', int(v)))
+    # GIF Quality
+    gq_container = ctk.CTkFrame(gif_panel, fg_color="transparent")
+    gq_container.pack(fill="x", pady=8, padx=10)
     
-    create_slider(gif_panel, "GIF Max Dimension (pixels)", 400, 1200, 800, COLOR_PURPLE,
-                 lambda v: setattr(roop.globals, 'GIF_MAX_SIZE', int(v)))
+    gq_label_frame = ctk.CTkFrame(gq_container, fg_color="transparent")
+    gq_label_frame.pack(fill="x", pady=(0, 5))
     
-    create_slider(gif_panel, "GIF Frame Skip (1 = No Skip)", 1, 5, 1, COLOR_PURPLE,
-                 lambda v: setattr(roop.globals, 'GIF_SKIP_FRAMES', int(v)))
+    ctk.CTkLabel(gq_label_frame, text="GIF Output Quality", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    gq_val = ctk.CTkLabel(gq_label_frame, text="92", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    gq_val.pack(side="right")
+    
+    gq_slider = ctk.CTkSlider(gq_container, from_=50, to=100, number_of_steps=50,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_PURPLE,
+                             height=16, button_length=20)
+    gq_slider.set(92)
+    gq_slider.pack(fill="x")
+    gq_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'GIF_QUALITY', int(v)),
+        gq_val.configure(text=str(int(v)))
+    ))
+    
+    # GIF Max Size
+    gs_container = ctk.CTkFrame(gif_panel, fg_color="transparent")
+    gs_container.pack(fill="x", pady=8, padx=10)
+    
+    gs_label_frame = ctk.CTkFrame(gs_container, fg_color="transparent")
+    gs_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(gs_label_frame, text="GIF Max Dimension (pixels)", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    gs_val = ctk.CTkLabel(gs_label_frame, text="800", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    gs_val.pack(side="right")
+    
+    gs_slider = ctk.CTkSlider(gs_container, from_=400, to=1200, number_of_steps=80,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_PURPLE,
+                             height=16, button_length=20)
+    gs_slider.set(800)
+    gs_slider.pack(fill="x")
+    gs_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'GIF_MAX_SIZE', int(v)),
+        gs_val.configure(text=str(int(v)))
+    ))
+    
+    # GIF Frame Skip
+    gf_container = ctk.CTkFrame(gif_panel, fg_color="transparent")
+    gf_container.pack(fill="x", pady=8, padx=10)
+    
+    gf_label_frame = ctk.CTkFrame(gf_container, fg_color="transparent")
+    gf_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(gf_label_frame, text="Frame Skip (1 = No Skip)", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    gf_val = ctk.CTkLabel(gf_label_frame, text="1", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    gf_val.pack(side="right")
+    
+    gf_slider = ctk.CTkSlider(gf_container, from_=1, to=5, number_of_steps=4,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_PURPLE,
+                             height=16, button_length=20)
+    gf_slider.set(1)
+    gf_slider.pack(fill="x")
+    gf_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'GIF_SKIP_FRAMES', int(v)),
+        gf_val.configure(text=str(int(v)))
+    ))
 
     # Image Settings Panel
     image_panel = create_settings_panel(right_col, "🖼️ IMAGE OUTPUT", COLOR_CYAN)
     image_panel.pack(fill="x", pady=(0, 20))
     
-    create_slider(image_panel, "Image Quality (PNG Compression)", 70, 100, 95, COLOR_CYAN,
-                 lambda v: setattr(roop.globals, 'OUTPUT_IMAGE_QUALITY', int(v)))
+    # Image Quality
+    iq_container = ctk.CTkFrame(image_panel, fg_color="transparent")
+    iq_container.pack(fill="x", pady=8, padx=10)
     
-    create_slider(image_panel, "Temp Frame Quality", 0, 100, 92, COLOR_CYAN,
-                 lambda v: setattr(roop.globals, 'temp_frame_quality', int(v)))
+    iq_label_frame = ctk.CTkFrame(iq_container, fg_color="transparent")
+    iq_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(iq_label_frame, text="Image Quality", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    iq_val = ctk.CTkLabel(iq_label_frame, text="95", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    iq_val.pack(side="right")
+    
+    iq_slider = ctk.CTkSlider(iq_container, from_=70, to=100, number_of_steps=30,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_CYAN,
+                             height=16, button_length=20)
+    iq_slider.set(95)
+    iq_slider.pack(fill="x")
+    iq_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'OUTPUT_IMAGE_QUALITY', int(v)),
+        iq_val.configure(text=str(int(v)))
+    ))
+    
+    # Temp Frame Quality
+    tq_container = ctk.CTkFrame(image_panel, fg_color="transparent")
+    tq_container.pack(fill="x", pady=8, padx=10)
+    
+    tq_label_frame = ctk.CTkFrame(tq_container, fg_color="transparent")
+    tq_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(tq_label_frame, text="Temp Frame Quality", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    tq_val = ctk.CTkLabel(tq_label_frame, text="92", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    tq_val.pack(side="right")
+    
+    tq_slider = ctk.CTkSlider(tq_container, from_=0, to=100, number_of_steps=100,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_CYAN,
+                             height=16, button_length=20)
+    tq_slider.set(92)
+    tq_slider.pack(fill="x")
+    tq_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'temp_frame_quality', int(v)),
+        tq_val.configure(text=str(int(v)))
+    ))
 
     # Advanced Processing Panel
     advanced_panel = create_settings_panel(right_col, "🔬 ADVANCED", COLOR_ORANGE)
     advanced_panel.pack(fill="x")
     
-    create_slider(advanced_panel, "Face Similarity Threshold", 0.1, 1.0, 0.85, COLOR_ORANGE,
-                 lambda v: setattr(roop.globals, 'similar_face_distance', float(v)), is_float=True)
+    # Similarity Threshold
+    st_container = ctk.CTkFrame(advanced_panel, fg_color="transparent")
+    st_container.pack(fill="x", pady=8, padx=10)
     
-    create_slider(advanced_panel, "Execution Threads (CPU)", 1, 16, 8, COLOR_ORANGE,
-                 lambda v: setattr(roop.globals, 'execution_threads', int(v)))
+    st_label_frame = ctk.CTkFrame(st_container, fg_color="transparent")
+    st_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(st_label_frame, text="Face Similarity Threshold", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    st_val = ctk.CTkLabel(st_label_frame, text="0.85", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    st_val.pack(side="right")
+    
+    st_slider = ctk.CTkSlider(st_container, from_=0.1, to=1.0, number_of_steps=90,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_ORANGE,
+                             height=16, button_length=20)
+    st_slider.set(0.85)
+    st_slider.pack(fill="x")
+    st_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'similar_face_distance', float(v)),
+        st_val.configure(text=f"{float(v):.2f}")
+    ))
+    
+    # Execution Threads
+    et_container = ctk.CTkFrame(advanced_panel, fg_color="transparent")
+    et_container.pack(fill="x", pady=8, padx=10)
+    
+    et_label_frame = ctk.CTkFrame(et_container, fg_color="transparent")
+    et_label_frame.pack(fill="x", pady=(0, 5))
+    
+    ctk.CTkLabel(et_label_frame, text="CPU Threads", 
+                font=("Segoe UI", 10), 
+                text_color=COLOR_TEXT_SECONDARY).pack(side="left")
+    
+    et_val = ctk.CTkLabel(et_label_frame, text="8", 
+                         font=("Segoe UI", 10, "bold"), 
+                         text_color=COLOR_TEXT_PRIMARY)
+    et_val.pack(side="right")
+    
+    et_slider = ctk.CTkSlider(et_container, from_=1, to=16, number_of_steps=15,
+                             button_color=COLOR_TEXT_PRIMARY, 
+                             progress_color=COLOR_ORANGE,
+                             height=16, button_length=20)
+    et_slider.set(8)
+    et_slider.pack(fill="x")
+    et_slider.configure(command=lambda v: (
+        setattr(roop.globals, 'execution_threads', int(v)),
+        et_val.configure(text=str(int(v)))
+    ))
     
     # Enhancement toggles
-    enhance_frame = ctk.CTkFrame(advanced_panel, fg_color="transparent")
-    enhance_frame.pack(fill="x", pady=(8, 0))
-    
     enhance_var = ctk.BooleanVar(value=getattr(roop.globals, 'ENABLE_FACE_ENHANCER', False))
-    create_checkbox(enhance_frame, "Enable Face Enhancement (Slower)", enhance_var, COLOR_ORANGE,
-                   lambda: setattr(roop.globals, 'ENABLE_FACE_ENHANCER', enhance_var.get()))
+    cb5 = ctk.CTkCheckBox(advanced_panel, text="Enable Face Enhancement (Slower)", 
+                         variable=enhance_var,
+                         command=lambda: setattr(roop.globals, 'ENABLE_FACE_ENHANCER', enhance_var.get()),
+                         font=("Segoe UI", 11), fg_color=COLOR_ORANGE, 
+                         hover_color="#e55a25",
+                         border_width=2, corner_radius=6,
+                         text_color=COLOR_TEXT_SECONDARY)
+    cb5.pack(anchor="w", pady=6, padx=10)
     
     color_var = ctk.BooleanVar(value=getattr(roop.globals, 'COLOR_CORRECTION', False))
-    create_checkbox(enhance_frame, "Auto Color Correction", color_var, COLOR_ORANGE,
-                   lambda: setattr(roop.globals, 'COLOR_CORRECTION', color_var.get()))
+    cb6 = ctk.CTkCheckBox(advanced_panel, text="Auto Color Correction", 
+                         variable=color_var,
+                         command=lambda: setattr(roop.globals, 'COLOR_CORRECTION', color_var.get()),
+                         font=("Segoe UI", 11), fg_color=COLOR_ORANGE, 
+                         hover_color="#e55a25",
+                         border_width=2, corner_radius=6,
+                         text_color=COLOR_TEXT_SECONDARY)
+    cb6.pack(anchor="w", pady=6, padx=10)
 
     # ==========================================================
     # 6. ACTION BUTTON (Gradient Style)
