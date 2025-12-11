@@ -24,7 +24,7 @@ execution_providers = ['CUDAExecutionProvider', 'cpu']  # GPU acceleration
 execution_threads = 8       # Multi-threading
 log_level = 'error'
 
-FIXED_OUTPUT_DIR = r'E:\Rextro\deepfake\roop\targets\Outputs'
+FIXED_OUTPUT_DIR = r'C:\Users\sanji\Desktop\Project of Mine all UG\Rextro\deepfake\roop\targets\Outputs'
 PIPELINE_ENABLED = False
 PIPELINE_AUTO_TARGET = None
 
