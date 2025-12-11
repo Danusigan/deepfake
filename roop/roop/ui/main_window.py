@@ -103,22 +103,21 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     header_frame.grid_columnconfigure(1, weight=1)
     header_frame.grid_propagate(False)
 
-    # Brand with Gradient Effect
+    # Brand with Gradient Effect - REXTRO
     brand_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
     brand_frame.grid(row=0, column=0, padx=25, pady=15)
     
-    title_label = ctk.CTkLabel(brand_frame, text="🎭 ROOP", 
-                               font=("Segoe UI", 22, "bold"), 
-                               text_color=COLOR_CYAN)
+    # Main title with stylish gradient-like effect
+    title_label = ctk.CTkLabel(brand_frame, text="⚡ REXTRO", 
+                               font=("Segoe UI", 26, "bold"), 
+                               text_color="#ff0080")  # Hot pink
     title_label.pack(side="left")
     
-    pro_badge = ctk.CTkLabel(brand_frame, text="PRO", 
-                            font=("Segoe UI", 10, "bold"),
-                            text_color=COLOR_BG,
-                            fg_color=COLOR_PINK,
-                            corner_radius=4,
-                            padx=8, pady=2)
-    pro_badge.pack(side="left", padx=(8, 0))
+    # Subtitle with cyan color
+    subtitle_label = ctk.CTkLabel(brand_frame, text="Face Swapping Studio", 
+                                 font=("Segoe UI", 14),
+                                 text_color=COLOR_CYAN)
+    subtitle_label.pack(side="left", padx=(12, 0), pady=(8, 0))
 
     # Status (Center) with Glow Effect - SIMPLIFIED
     status_container = ctk.CTkFrame(header_frame, fg_color="#1a1f2e", corner_radius=20, 
