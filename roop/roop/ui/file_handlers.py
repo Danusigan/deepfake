@@ -41,7 +41,7 @@ CATEGORIES = {
     "Male": os.path.join(TARGETS_ROOT_DIR, 'Male'),
     "Female": os.path.join(TARGETS_ROOT_DIR, 'Female'), 
     "Children": os.path.join(TARGETS_ROOT_DIR, 'Children'),
-    "Trending": os.path.join(TARGETS_ROOT_DIR, 'Trending gif')
+    "Gifs": os.path.join(TARGETS_ROOT_DIR, 'Trending gif')
 }
 
 
